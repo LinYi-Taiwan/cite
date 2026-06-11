@@ -1,0 +1,45 @@
+{
+  "target": "checkout",
+  "agent": "claude",
+  "skills": [
+    {
+      "id": "cross-product-impact",
+      "reason": "mounted",
+      "includes": [
+        "dependency-matrix"
+      ],
+      "imports": {
+        "Metrics": "../metrics-definition"
+      },
+      "references": [
+        "checkout"
+      ]
+    },
+    {
+      "id": "metrics-definition",
+      "reason": "pulled-by:cross-product-impact",
+      "includes": [],
+      "imports": {},
+      "references": []
+    },
+    {
+      "id": "prd-writing",
+      "reason": "mounted",
+      "includes": [
+        "acceptance-criteria",
+        "rollout-plan"
+      ],
+      "imports": {
+        "Impact": "../cross-product-impact",
+        "Metrics": "../metrics-definition"
+      },
+      "references": [
+        "checkout",
+        "glossary"
+      ]
+    }
+  ],
+  "warnings": [
+    "block/unused: block `stakeholder-raci` is included by no skill"
+  ]
+}
