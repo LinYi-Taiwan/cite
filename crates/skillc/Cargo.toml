@@ -7,7 +7,7 @@ license.workspace = true
 description = "Compiler/CLI for authoring reusable AI-agent skills."
 
 [[bin]]
-name = "skillc"
+name = "cite"
 path = "src/main.rs"
 
 [dependencies]

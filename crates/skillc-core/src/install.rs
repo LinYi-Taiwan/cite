@@ -204,7 +204,7 @@ pub fn install(
                     format!("cannot remove stale skill `{stale}`: {e}"),
                 )
             })?;
-            eprintln!("skillc: removed stale skill `{stale}` (no longer in {install_key})");
+            eprintln!("cite: removed stale skill `{stale}` (no longer in {install_key})");
         }
     }
 

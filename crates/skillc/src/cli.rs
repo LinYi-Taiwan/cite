@@ -10,7 +10,7 @@ use skillc_core::{BuildOptions, CheckOptions, InstallOptions, PipelineError, Why
 
 #[derive(Debug, Parser)]
 #[command(
-    name = "skillc",
+    name = "cite",
     about = "Compile reusable AI-agent skills into per-(target, agent) artifacts.",
     version
 )]
@@ -141,7 +141,7 @@ fn run_check_cmd(args: CheckArgs) -> i32 {
     match skillc_core::run_check(&opts) {
         Ok(diags) => {
             print_diagnostics(&diags);
-            eprintln!("skillc: check passed");
+            eprintln!("cite: check passed");
             ExitCode::Success.code()
         }
         Err(PipelineError::Usage(d)) => {
@@ -245,7 +245,7 @@ fn run_build_cmd(args: BuildArgs) -> i32 {
             let code = match skillc_core::run_build(&opts) {
                 Ok(report) => {
                     print_once(&report.diagnostics);
-                    eprintln!("skillc: built {}", report.artifact_dir.display());
+                    eprintln!("cite: built {}", report.artifact_dir.display());
                     ExitCode::Success.code()
                 }
                 Err(PipelineError::Usage(d)) => {
@@ -261,7 +261,7 @@ fn run_build_cmd(args: BuildArgs) -> i32 {
         }
     }
     if suppressed > 0 {
-        eprintln!("skillc: {suppressed} duplicate diagnostic lines across combos suppressed");
+        eprintln!("cite: {suppressed} duplicate diagnostic lines across combos suppressed");
     }
     worst
 }
