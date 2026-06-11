@@ -1,0 +1,5 @@
+targets:
+  admin:
+    entry:
+      mounts: [does-not-exist]
+agents: [claude]

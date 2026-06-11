@@ -1,0 +1,52 @@
+[package]
+name = "skillc-core"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "The skill-compiler pipeline: parse -> resolve -> validate -> shake -> assemble -> emit -> install."
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+serde_norway.workspace = true
+petgraph.workspace = true
+sha2.workspace = true
+
+[dev-dependencies]
+insta.workspace = true
+serde_json.workspace = true
+serde_norway.workspace = true
+
+# Integration tests live at the workspace-root `tests/integration/` per plan.md.
+[[test]]
+name = "us1_reuse"
+path = "../../tests/integration/us1_reuse.rs"
+
+[[test]]
+name = "us2_markers_deps"
+path = "../../tests/integration/us2_markers_deps.rs"
+
+[[test]]
+name = "us3_entry_pull"
+path = "../../tests/integration/us3_entry_pull.rs"
+
+[[test]]
+name = "us4_conformance"
+path = "../../tests/integration/us4_conformance.rs"
+
+[[test]]
+name = "us5_artifact"
+path = "../../tests/integration/us5_artifact.rs"
+
+[[test]]
+name = "security_paths"
+path = "../../tests/integration/security_paths.rs"
+
+[[test]]
+name = "loadable_skill"
+path = "../../tests/integration/loadable_skill.rs"
+
+[[test]]
+name = "maintainer_tooling"
+path = "../../tests/integration/maintainer_tooling.rs"

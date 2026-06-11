@@ -1,0 +1,25 @@
+# Workspace manifest for the Skill Compiler (`skillc`).
+# A thin `skillc` binary (CLI) over a `skillc-core` library holding the whole pipeline.
+[workspace]
+resolver = "2"
+members = ["crates/skillc", "crates/skillc-core"]
+
+[workspace.package]
+edition = "2021"
+rust-version = "1.83"
+license = "MIT"
+repository = "https://github.com/starlinglabs/cite"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_norway = "0.9"
+petgraph = "0.6"
+sha2 = "0.10"
+clap = { version = "4", features = ["derive"] }
+insta = { version = "1", features = ["yaml", "json"] }
+
+[profile.release]
+# Determinism + size; nothing nondeterministic in codegen affects artifact bytes,
+# but keep the binary lean and reproducible.
+strip = true

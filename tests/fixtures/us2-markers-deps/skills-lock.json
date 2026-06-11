@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "sources": {
+    "shared-skills": {
+      "url": "https://example.com/org/shared-skills.git",
+      "commit": "0000000000000000000000000000000000000000",
+      "path": "sources/shared-skills"
+    }
+  }
+}

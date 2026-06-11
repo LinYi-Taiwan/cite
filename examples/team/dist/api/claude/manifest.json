@@ -1,0 +1,18 @@
+{
+  "target": "api",
+  "agent": "claude",
+  "skills": [
+    {
+      "id": "backend-coding",
+      "reason": "mounted",
+      "includes": [
+        "commit-format"
+      ],
+      "imports": {},
+      "references": [
+        "api"
+      ]
+    }
+  ],
+  "warnings": []
+}

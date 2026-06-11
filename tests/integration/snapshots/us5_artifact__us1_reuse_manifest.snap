@@ -1,0 +1,31 @@
+---
+source: crates/skillc-core/../../tests/integration/us5_artifact.rs
+expression: manifest
+---
+{
+  "target": "admin",
+  "agent": "claude",
+  "skills": [
+    {
+      "id": "frontend-coding",
+      "reason": "mounted",
+      "includes": [
+        "pr-rules"
+      ],
+      "imports": {},
+      "references": []
+    },
+    {
+      "id": "git",
+      "reason": "mounted",
+      "includes": [
+        "pr-rules"
+      ],
+      "imports": {},
+      "references": []
+    }
+  ],
+  "warnings": [
+    "block/unused: block `experimental` is included by no skill"
+  ]
+}

@@ -1,0 +1,5 @@
+targets:
+  admin:
+    entry:
+      mounts: ["../../../../../../tmp/skillc-pwned"]
+agents: [claude]

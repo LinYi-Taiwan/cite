@@ -1,0 +1,9 @@
+targets:
+  scm:
+    entry:
+      mounts: [frontend-coding]
+  admin:
+    entry:
+      mounts: [git]
+agents: [claude]
+sharedReferences: [glossary]

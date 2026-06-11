@@ -1,0 +1,5 @@
+targets:
+  scm:
+    entry:
+      mounts: [reviewer, auditor]
+agents: [claude]

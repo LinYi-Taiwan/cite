@@ -1,0 +1,1 @@
+Shared glossary (always retained).

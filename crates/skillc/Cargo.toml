@@ -1,0 +1,15 @@
+[package]
+name = "skillc"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Compiler/CLI for authoring reusable AI-agent skills."
+
+[[bin]]
+name = "skillc"
+path = "src/main.rs"
+
+[dependencies]
+skillc-core = { path = "../skillc-core" }
+clap.workspace = true

@@ -1,0 +1,7 @@
+# Deny warnings in CI; clippy lints surfaced as errors there.
+# Local dev keeps warnings as warnings (override RUSTFLAGS in CI).
+[build]
+
+[alias]
+# `cargo lint` == the CI clippy gate.
+lint = "clippy --workspace --all-targets -- -D warnings"

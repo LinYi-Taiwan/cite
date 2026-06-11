@@ -1,0 +1,6 @@
+targets:
+  admin:
+    entry:
+      mounts: [s]
+agents: [claude]
+sharedReferences: [glossary]

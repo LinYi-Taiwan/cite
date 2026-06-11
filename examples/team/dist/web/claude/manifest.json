@@ -1,0 +1,18 @@
+{
+  "target": "web",
+  "agent": "claude",
+  "skills": [
+    {
+      "id": "frontend-coding",
+      "reason": "mounted",
+      "includes": [
+        "commit-format"
+      ],
+      "imports": {},
+      "references": [
+        "web"
+      ]
+    }
+  ],
+  "warnings": []
+}
