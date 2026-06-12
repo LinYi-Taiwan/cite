@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>cite graph</title>
+<style>
+  :root {
+    --page:#1d3557; --template:#457b9d; --organism:#2a9d8f; --molecule:#8ab17d;
+    --external:#9b5de5; --atom:#e9c46a; --reference:#cfcfcf;
+    --bg:#fafaf8; --panel:#ffffff; --ink:#222;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; font:13px/1.45 -apple-system,'Helvetica Neue',Arial,sans-serif; color:var(--ink); background:var(--bg); display:flex; flex-direction:column; height:100vh; }
+  header { display:flex; gap:14px; align-items:center; padding:8px 14px; background:#fff; border-bottom:1px solid #e3e3de; flex-wrap:wrap; }
+  header h1 { font-size:15px; margin:0 8px 0 0; font-weight:600; }
+  .chips { display:flex; gap:6px; }
+  .chip { border:1px solid #ccc; border-radius:12px; padding:2px 10px; cursor:pointer; background:#fff; font-size:12px; }
+  .chip.on { background:var(--page); color:#fff; border-color:var(--page); }
+  label.toggle { font-size:12px; display:flex; align-items:center; gap:4px; cursor:pointer; }
+  #search { border:1px solid #ccc; border-radius:6px; padding:3px 8px; font-size:12px; width:180px; }
+  #legend { display:flex; gap:10px; margin-left:auto; font-size:11px; align-items:center; flex-wrap:wrap; }
+  #legend .sw { display:inline-block; width:10px; height:10px; border-radius:3px; margin-right:3px; vertical-align:-1px; }
+  main { flex:1; display:flex; min-height:0; }
+  #canvas { flex:1; min-width:0; cursor:grab; }
+  #canvas:active { cursor:grabbing; }
+  #panel { width:320px; border-left:1px solid #e3e3de; background:var(--panel); padding:14px; overflow-y:auto; display:none; }
+  #panel.open { display:block; }
+  #panel h2 { font-size:14px; margin:0 0 4px; word-break:break-all; }
+  #panel .meta { color:#777; font-size:11px; margin-bottom:8px; }
+  #panel .tag { display:inline-block; border-radius:4px; padding:1px 6px; font-size:11px; color:#fff; margin-right:4px; }
+  #panel .flag { background:#c1121f; }
+  #panel h3 { font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:#888; margin:12px 0 4px; }
+  #panel ul { margin:0; padding-left:0; list-style:none; }
+  #panel li { padding:2px 0; }
+  #panel a { color:var(--template); cursor:pointer; text-decoration:none; word-break:break-all; }
+  #panel a:hover { text-decoration:underline; }
+  #panel .desc { font-size:12px; color:#444; }
+  #panel .close { float:right; cursor:pointer; color:#999; font-size:16px; line-height:1; }
+  svg text { font:11px -apple-system,'Helvetica Neue',Arial,sans-serif; pointer-events:none; }
+  .node rect { cursor:pointer; }
+  .node.dim { opacity:.15; }
+  .edge { fill:none; }
+  .edge.dim { opacity:.06; }
+  .rowlabel { font-size:10px; fill:#aaa; text-transform:uppercase; letter-spacing:.08em; }
+  #empty { position:absolute; top:50%; left:40%; color:#999; display:none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>cite graph</h1>
+  <div class="chips" id="targets"></div>
+  <input id="search" type="search" placeholder="filter by id…">
+  <label class="toggle"><input type="checkbox" id="show-refs"> references</label>
+  <label class="toggle"><input type="checkbox" id="show-atoms" checked> atoms</label>
+  <div id="legend"></div>
+</header>
+<main>
+  <svg id="canvas"></svg>
+  <aside id="panel"></aside>
+</main>
+<div id="empty">no nodes match the current filters</div>
+<script>
+const GRAPH = __GRAPH_JSON__;
+
+const LAYERS = ["page","template","organism","molecule","atom","reference"];
+const LAYER_LABEL = {page:"Pages",template:"Templates",organism:"Organisms",molecule:"Molecules",atom:"Atoms",reference:"References"};
+const FILL = {page:"#1d3557",template:"#457b9d",organism:"#2a9d8f",molecule:"#8ab17d",atom:"#e9c46a",reference:"#cfcfcf"};
+const DARK_TEXT = {atom:1,reference:1};
+const EDGE_STYLE = {
+  mounts:   {stroke:"#1d3557", width:2.2, dash:null,    arrow:true},
+  imports:  {stroke:"#2a9d8f", width:1.4, dash:null,    arrow:true},
+  includes: {stroke:"#b5862c", width:1.2, dash:"5,4",   arrow:true},
+  hosts:    {stroke:"#bbb",    width:1,   dash:"2,3",   arrow:false},
+};
+
+const nodesById = new Map(GRAPH.nodes.map(n => [n.id, n]));
+const state = { target:null, query:"", showRefs:false, showAtoms:true, selected:null };
+
+// ---------- header ----------
+const targetNames = GRAPH.nodes.filter(n => n.kind==="target").map(n => n.id);
+const chipsEl = document.getElementById("targets");
+function mkChip(label, value){
+  const c = document.createElement("span");
+  c.className = "chip"; c.textContent = label;
+  c.onclick = () => { state.target = value; syncChips(); update(); };
+  c.dataset.value = value ?? "";
+  chipsEl.appendChild(c);
+}
+mkChip("all", null);
+targetNames.forEach(t => mkChip(t, t));
+function syncChips(){
+  for (const c of chipsEl.children) c.classList.toggle("on", (c.dataset.value||null) === state.target);
+}
+syncChips();
+
+const legendEl = document.getElementById("legend");
+for (const l of LAYERS) {
+  const present = GRAPH.nodes.some(n => n.layer===l);
+  if (!present) continue;
+  const s = document.createElement("span");
+  s.innerHTML = `<span class="sw" style="background:${FILL[l]}"></span>${l}`;
+  legendEl.appendChild(s);
+}
+if (GRAPH.nodes.some(n => n.external)) {
+  const s = document.createElement("span");
+  s.innerHTML = `<span class="sw" style="background:#fff;border:1.5px dashed #555"></span>external`;
+  legendEl.appendChild(s);
+}
+
+document.getElementById("search").oninput = e => { state.query = e.target.value.trim().toLowerCase(); update(); };
+document.getElementById("show-refs").onchange = e => { state.showRefs = e.target.checked; update(); };
+document.getElementById("show-atoms").onchange = e => { state.showAtoms = e.target.checked; update(); };
+
+// ---------- filtering ----------
+function visibleNodes(){
+  return GRAPH.nodes.filter(n => {
+    if (n.layer==="reference" && !state.showRefs) return false;
+    if (n.layer==="atom" && !state.showAtoms) return false;
+    if (state.target) {
+      if (n.kind==="target") { if (n.id!==state.target) return false; }
+      else if (!(n.targets||[]).includes(state.target)) return false;
+    }
+    return true;
+  });
+}
+
+// ---------- layout: layered rows, barycenter ordering ----------
+const NODE_H = 26, ROW_GAP = 110, X_GAP = 18, PAD = 60;
+function measure(id){ return Math.max(60, id.length*6.4 + 18); }
+
+function layout(nodes, edges){
+  const rows = LAYERS.map(l => nodes.filter(n => n.layer===l)).filter(r => r.length);
+  const pos = new Map();
+  // initial order: alphabetical (stable), then a few barycenter sweeps
+  rows.forEach(r => r.sort((a,b) => a.id.localeCompare(b.id)));
+  const idx = new Map();
+  const reindex = () => rows.forEach(r => r.forEach((n,i) => idx.set(n.id, i)));
+  reindex();
+  const neighbors = new Map(nodes.map(n => [n.id, []]));
+  for (const e of edges){
+    if (neighbors.has(e.from) && neighbors.has(e.to)){
+      neighbors.get(e.from).push(e.to);
+      neighbors.get(e.to).push(e.from);
+    }
+  }
+  for (let sweep=0; sweep<4; sweep++){
+    for (const r of rows){
+      const bary = n => {
+        const ns = neighbors.get(n.id).filter(m => idx.has(m));
+        if (!ns.length) return idx.get(n.id);
+        return ns.reduce((s,m) => s+idx.get(m), 0)/ns.length;
+      };
+      r.sort((a,b) => bary(a)-bary(b) || a.id.localeCompare(b.id));
+      reindex();
+    }
+  }
+  let maxW = 0;
+  const rowYs = [];
+  rows.forEach((r,ri) => {
+    const widths = r.map(n => measure(n.id));
+    const total = widths.reduce((a,b)=>a+b,0) + X_GAP*(r.length-1);
+    maxW = Math.max(maxW, total);
+    rowYs.push(PAD + ri*ROW_GAP);
+  });
+  rows.forEach((r,ri) => {
+    const widths = r.map(n => measure(n.id));
+    const total = widths.reduce((a,b)=>a+b,0) + X_GAP*(r.length-1);
+    let x = PAD + (maxW-total)/2;
+    r.forEach((n,i) => {
+      pos.set(n.id, {x, y:rowYs[ri], w:widths[i], h:NODE_H, layer:n.layer});
+      x += widths[i] + X_GAP;
+    });
+  });
+  return {pos, rows, width: maxW + PAD*2, height: PAD*2 + (rows.length-1)*ROW_GAP + NODE_H};
+}
+
+// ---------- render ----------
+const svg = document.getElementById("canvas");
+const SVGNS = "http://www.w3.org/2000/svg";
+let view = {x:0, y:0, k:1};
+
+function el(name, attrs, parent){
+  const e = document.createElementNS(SVGNS, name);
+  for (const [k,v] of Object.entries(attrs||{})) e.setAttribute(k, v);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+
+function update(){
+  svg.innerHTML = "";
+  const nodes = visibleNodes();
+  const visIds = new Set(nodes.map(n => n.id));
+  const edges = GRAPH.edges.filter(e => visIds.has(e.from) && visIds.has(e.to));
+  document.getElementById("empty").style.display = nodes.length ? "none" : "block";
+  if (!nodes.length) return;
+
+  const {pos, rows, width, height} = layout(nodes, edges);
+
+  const defs = el("defs", {}, svg);
+  for (const [kind, st] of Object.entries(EDGE_STYLE)){
+    const m = el("marker", {id:"arr-"+kind, viewBox:"0 0 10 10", refX:9, refY:5, markerWidth:6, markerHeight:6, orient:"auto-start-reverse"}, defs);
+    el("path", {d:"M0,0 L10,5 L0,10 z", fill:st.stroke}, m);
+  }
+  const root = el("g", {id:"root"}, svg);
+
+  // row labels
+  rows.forEach((r) => {
+    const y = pos.get(r[0].id).y;
+    const t = el("text", {x:8, y:y+NODE_H/2+4, class:"rowlabel"}, root);
+    t.textContent = LAYER_LABEL[r[0].layer];
+  });
+
+  // neighbor map for highlight
+  const inc = new Map(nodes.map(n => [n.id, new Set([n.id])]));
+  for (const e of edges){ inc.get(e.from).add(e.to); inc.get(e.to).add(e.from); }
+
+  const matches = id => !state.query || id.toLowerCase().includes(state.query);
+  const focusSet = state.selected && visIds.has(state.selected) ? inc.get(state.selected) : null;
+
+  // edges under nodes
+  for (const e of edges){
+    const a = pos.get(e.from), b = pos.get(e.to);
+    const st = EDGE_STYLE[e.kind] || EDGE_STYLE.imports;
+    const x1 = a.x+a.w/2, x2 = b.x+b.w/2;
+    let d;
+    if (Math.abs(a.y-b.y) < 1){ // same row: arc above
+      const lift = 36 + Math.abs(x2-x1)*0.06;
+      d = `M${x1},${a.y} C${x1},${a.y-lift} ${x2},${b.y-lift} ${x2},${b.y}`;
+    } else {
+      const [sy, ty] = a.y < b.y ? [a.y+a.h, b.y] : [a.y, b.y+b.h];
+      const mid = (sy+ty)/2;
+      d = `M${x1},${sy} C${x1},${mid} ${x2},${mid} ${x2},${ty}`;
+    }
+    const dim = focusSet && !(focusSet.has(e.from) && focusSet.has(e.to));
+    const p = el("path", {d, class:"edge"+(dim?" dim":""), stroke:st.stroke, "stroke-width":st.width}, root);
+    if (st.dash) p.setAttribute("stroke-dasharray", st.dash);
+    if (st.arrow) p.setAttribute("marker-end", `url(#arr-${e.kind})`);
+    if (e.alias) { const t = el("title", {}, p); t.textContent = `${e.kind} {{${e.alias}}}`; }
+    else { const t = el("title", {}, p); t.textContent = e.kind; }
+  }
+
+  // nodes
+  for (const n of nodes){
+    const p = pos.get(n.id);
+    const dim = (focusSet && !focusSet.has(n.id)) || !matches(n.id);
+    const g = el("g", {class:"node"+(dim?" dim":"")}, root);
+    const r = el("rect", {x:p.x, y:p.y, width:p.w, height:p.h, rx:6, fill:FILL[n.layer]}, g);
+    if (n.flags && n.flags.length){ r.setAttribute("stroke", "#c1121f"); r.setAttribute("stroke-width", "2.5"); }
+    else if (n.id === state.selected){ r.setAttribute("stroke", "#222"); r.setAttribute("stroke-width", "2"); }
+    if (n.external) { r.setAttribute("stroke-dasharray", "4,3"); if (!n.flags || !n.flags.length) { r.setAttribute("stroke", "#555"); r.setAttribute("stroke-width", "1.4"); } }
+    const t = el("text", {x:p.x+p.w/2, y:p.y+p.h/2+4, "text-anchor":"middle", fill:DARK_TEXT[n.layer]?"#333":"#fff"}, g);
+    t.textContent = n.id;
+    const tip = el("title", {}, g);
+    tip.textContent = [n.id, n.description, n.flags?.length?("⚠ "+n.flags.join(", ")):null].filter(Boolean).join("\n");
+    g.onclick = ev => { ev.stopPropagation(); select(n.id); };
+  }
+
+  svg.setAttribute("viewBox", `${view.x} ${view.y} ${width/view.k} ${height/view.k}`);
+  svg.dataset.w = width; svg.dataset.h = height;
+  applyView();
+}
+
+function applyView(){
+  const w = +svg.dataset.w || 1000, h = +svg.dataset.h || 600;
+  svg.setAttribute("viewBox", `${view.x} ${view.y} ${w/view.k} ${h/view.k}`);
+}
+
+// pan + zoom
+let drag = null;
+svg.addEventListener("mousedown", e => { drag = {x:e.clientX, y:e.clientY, vx:view.x, vy:view.y}; });
+window.addEventListener("mousemove", e => {
+  if (!drag) return;
+  const scale = (+svg.dataset.w||1000)/view.k/svg.clientWidth;
+  view.x = drag.vx - (e.clientX-drag.x)*scale;
+  view.y = drag.vy - (e.clientY-drag.y)*scale;
+  applyView();
+});
+window.addEventListener("mouseup", () => drag = null);
+svg.addEventListener("wheel", e => {
+  e.preventDefault();
+  const factor = e.deltaY < 0 ? 1.12 : 1/1.12;
+  view.k = Math.min(8, Math.max(0.2, view.k*factor));
+  applyView();
+}, {passive:false});
+svg.addEventListener("click", () => select(null));
+
+// ---------- detail panel (the inline `why` view) ----------
+const panel = document.getElementById("panel");
+function select(id){
+  state.selected = id;
+  if (!id){ panel.classList.remove("open"); update(); return; }
+  const n = nodesById.get(id);
+  const inn = GRAPH.edges.filter(e => e.to===id);
+  const out = GRAPH.edges.filter(e => e.from===id);
+  const link = nid => `<a data-nav="${nid}">${nid}</a>`;
+  const group = (edges, dir) => {
+    const byKind = {};
+    for (const e of edges) (byKind[e.kind] ||= []).push(e);
+    return Object.entries(byKind).map(([kind, es]) => `
+      <h3>${dir} · ${kind}</h3>
+      <ul>${es.map(e => `<li>${link(dir==="in"?e.from:e.to)}${e.alias?` <span style="color:#999">{{${e.alias}}}</span>`:""}</li>`).join("")}</ul>
+    `).join("");
+  };
+  panel.innerHTML = `
+    <span class="close" data-close>×</span>
+    <h2>${n.id}</h2>
+    <div class="meta">${n.kind} · ${n.layer}${n.external?" · external":""}${n.refKind?` · ${n.refKind}`:""}${n.source?`<br>${n.source}`:""}</div>
+    ${(n.flags||[]).map(f => `<span class="tag flag">${f}</span>`).join("")}
+    ${n.description ? `<p class="desc">${n.description}</p>` : ""}
+    ${n.targets && n.targets.length ? `<h3>ships in targets</h3><ul><li>${n.targets.join(", ")}</li></ul>` : (n.kind!=="target" ? `<h3>ships in targets</h3><ul><li style="color:#999">(none)</li></ul>` : "")}
+    ${group(inn, "in")}${group(out, "out")}
+  `;
+  panel.classList.add("open");
+  panel.querySelectorAll("[data-nav]").forEach(a => a.onclick = () => select(a.dataset.nav));
+  panel.querySelector("[data-close]").onclick = () => select(null);
+  update();
+}
+
+update();
+</script>
+</body>
+</html>

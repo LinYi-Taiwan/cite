@@ -14,6 +14,7 @@ pub mod config;
 pub mod diagnostics;
 pub mod emit;
 pub mod graph;
+pub mod graph_export;
 pub mod install;
 pub mod model;
 pub mod parse;
@@ -287,6 +288,76 @@ pub fn run_why(opts: &WhyOptions) -> Result<String, PipelineError> {
             ),
         ))),
     }
+}
+
+/// Options for `skillc graph`.
+#[derive(Debug, Clone)]
+pub struct GraphOptions {
+    pub catalog: PathBuf,
+    pub config: Option<PathBuf>,
+    pub format: graph_export::GraphFormat,
+    /// Restrict to one target's bundle closure.
+    pub target: Option<String>,
+    /// Restrict to the neighborhood of one unit.
+    pub focus: Option<String>,
+    /// Hop radius for `focus` (ignored without it).
+    pub depth: usize,
+}
+
+/// Export the catalog's dependency graph (`skillc graph`): every target / skill / block /
+/// reference and the mounts / imports / includes / hosts edges between them. Read-only;
+/// reuses the compiler's own resolution, so the picture matches what `build` would do.
+pub fn run_graph(opts: &GraphOptions) -> Result<String, PipelineError> {
+    let cfg = FrameworkConfig::discover(&opts.catalog, opts.config.as_deref())
+        .map_err(PipelineError::Usage)?;
+
+    if let Some(t) = &opts.target {
+        if !cfg.is_target(t) {
+            return Err(PipelineError::Usage(Diagnostic::error(
+                Code::ConfigInvalid,
+                format!(
+                    "unknown target `{t}` (registered targets: {})",
+                    cfg.target_names()
+                        .into_iter()
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ),
+            )));
+        }
+    }
+
+    let mut diags = Diagnostics::new();
+    let catalog: Catalog = parse::parse_catalog(&opts.catalog, &mut diags);
+    graph::analyze_includes(&catalog, &mut diags);
+    let lock = resolve::lock::Lockfile::read(&opts.catalog).map_err(PipelineError::Usage)?;
+    let resolution = resolve::resolve(&catalog, &opts.catalog, &lock, false, false, &mut diags);
+    if diags.has_errors() {
+        return Err(PipelineError::Hard(diags));
+    }
+
+    let full = graph_export::export(&catalog, &cfg, &resolution, &opts.catalog);
+
+    if let Some(focus) = &opts.focus {
+        if !full.nodes.iter().any(|n| &n.id == focus) {
+            return Err(PipelineError::Usage(Diagnostic::error(
+                Code::ConfigInvalid,
+                format!(
+                    "`{focus}` is not a unit in this catalog\n{}",
+                    query::inventory(&catalog)
+                ),
+            )));
+        }
+    }
+
+    let filtered = graph_export::filter(
+        full,
+        &graph_export::GraphFilter {
+            target: opts.target.clone(),
+            focus: opts.focus.clone(),
+            depth: opts.depth,
+        },
+    );
+    Ok(graph_export::render(&filtered, opts.format))
 }
 
 /// Place a previously-built artifact into an agent destination (separate step, FR-023).

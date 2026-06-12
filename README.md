@@ -161,6 +161,29 @@ Works for blocks, catalog skills, and external (cross-repo pulled) skills. The a
 computed from the compiler's own resolution — not a text grep — so it matches what `build`
 ships. Unknown ids exit `2` and print the catalog inventory.
 
+### `skillc graph`
+
+```bash
+skillc graph [--format html|json|dot|mermaid] [--target <T>] [--focus <id>] [--depth <N>]
+             [--out <file>] [--open] [--catalog <dir>] [--config <file>]
+```
+
+The whole-catalog dependency graph: every target / skill / block / reference as nodes,
+every `mounts` / `imports` / `includes` / `hosts` edge between them. Layers are derived
+from structure (mounted ⇒ template, has imports ⇒ organism, none ⇒ molecule, block ⇒
+atom); cross-repo pulled units keep their derived layer and carry `external: true`.
+Health flags (`orphan` skills, `unused` blocks, `stray` references) are attached to the
+nodes, so the graph doubles as a catalog health dashboard.
+
+The default `html` format writes a self-contained viewer to `<catalog>/dist/graph.html`
+(no server, no dependencies — `--open` launches it): layered swim-lanes, per-target
+filtering, search, and a click-through detail panel showing each node's inline `why`
+report. `json` is the canonical machine-readable export (stdout by default) — diff it
+across commits to see what a PR makes a target ship; `dot` pipes into graphviz and
+`mermaid` pastes into a PR description. `--target` restricts to one bundle's closure;
+`--focus <id> --depth <N>` cuts the neighborhood around one unit. Like `why`, the answer
+is computed from the compiler's own resolution, so it matches what `build` ships.
+
 ### `skillc install`
 
 ```bash

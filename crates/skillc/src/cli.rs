@@ -6,7 +6,10 @@ use std::path::PathBuf;
 use clap::{Args, Parser, Subcommand};
 use skillc_core::config::FrameworkConfig;
 use skillc_core::diagnostics::{Code, Diagnostic, Diagnostics, ExitCode, Severity};
-use skillc_core::{BuildOptions, CheckOptions, InstallOptions, PipelineError, WhyOptions};
+use skillc_core::graph_export::GraphFormat;
+use skillc_core::{
+    BuildOptions, CheckOptions, GraphOptions, InstallOptions, PipelineError, WhyOptions,
+};
 
 #[derive(Debug, Parser)]
 #[command(
@@ -28,6 +31,9 @@ enum Command {
     /// Explain a skill's or block's reverse dependencies: who includes/imports it and
     /// which targets ship it.
     Why(WhyArgs),
+    /// Export the catalog's dependency graph (targets / skills / blocks / references and
+    /// the mounts / imports / includes / hosts edges) as html, json, dot, or mermaid.
+    Graph(GraphArgs),
     /// Place a previously-built artifact into an agent destination.
     Install(InstallArgs),
 }
@@ -95,6 +101,34 @@ struct WhyArgs {
 }
 
 #[derive(Debug, Args)]
+struct GraphArgs {
+    /// Output format: html (self-contained viewer), json (canonical), dot, mermaid.
+    #[arg(long, default_value = "html")]
+    format: String,
+    /// Restrict to one target's bundle closure.
+    #[arg(long)]
+    target: Option<String>,
+    /// Restrict to the neighborhood of one skill/block/reference id.
+    #[arg(long)]
+    focus: Option<String>,
+    /// Hop radius around --focus.
+    #[arg(long, default_value_t = 2)]
+    depth: usize,
+    /// Output file. Defaults: html → dist/graph.html; other formats → stdout.
+    #[arg(long)]
+    out: Option<PathBuf>,
+    /// Open the written file (html) in the default browser.
+    #[arg(long)]
+    open: bool,
+    /// Root of the skill catalog.
+    #[arg(long, default_value = ".")]
+    catalog: PathBuf,
+    /// Framework config (default: skillc.config.yaml in the catalog).
+    #[arg(long)]
+    config: Option<PathBuf>,
+}
+
+#[derive(Debug, Args)]
 struct InstallArgs {
     /// A directory produced by `build`.
     #[arg(long)]
@@ -126,6 +160,7 @@ pub fn run() -> i32 {
         Command::Build(args) => run_build_cmd(args),
         Command::Check(args) => run_check_cmd(args),
         Command::Why(args) => run_why_cmd(args),
+        Command::Graph(args) => run_graph_cmd(args),
         Command::Install(args) => run_install_cmd(args),
     }
 }
@@ -174,6 +209,93 @@ fn run_why_cmd(args: WhyArgs) -> i32 {
             print_diagnostics(&diags);
             ExitCode::HardFailure.code()
         }
+    }
+}
+
+fn run_graph_cmd(args: GraphArgs) -> i32 {
+    let Some(format) = GraphFormat::parse(&args.format) else {
+        eprintln!(
+            "{}",
+            Diagnostic::error(
+                Code::ConfigInvalid,
+                format!(
+                    "unknown format `{}` (expected html, json, dot, or mermaid)",
+                    args.format
+                ),
+            )
+        );
+        return ExitCode::Usage.code();
+    };
+
+    let opts = GraphOptions {
+        catalog: args.catalog.clone(),
+        config: args.config,
+        format,
+        target: args.target,
+        focus: args.focus,
+        depth: args.depth,
+    };
+    let rendered = match skillc_core::run_graph(&opts) {
+        Ok(r) => r,
+        Err(PipelineError::Usage(d)) => {
+            eprintln!("{d}");
+            return ExitCode::Usage.code();
+        }
+        Err(PipelineError::Hard(diags)) => {
+            print_diagnostics(&diags);
+            return ExitCode::HardFailure.code();
+        }
+    };
+
+    // html defaults to a file (it's for a browser); text formats default to stdout.
+    let out = args.out.or_else(|| {
+        (format == GraphFormat::Html).then(|| args.catalog.join("dist").join("graph.html"))
+    });
+    match out {
+        None => {
+            print!("{rendered}");
+            ExitCode::Success.code()
+        }
+        Some(path) => {
+            if let Some(parent) = path.parent() {
+                if let Err(e) = std::fs::create_dir_all(parent) {
+                    eprintln!(
+                        "{}",
+                        Diagnostic::error(
+                            Code::ConfigInvalid,
+                            format!("cannot create `{}`: {e}", parent.display()),
+                        )
+                    );
+                    return ExitCode::Usage.code();
+                }
+            }
+            if let Err(e) = std::fs::write(&path, rendered) {
+                eprintln!(
+                    "{}",
+                    Diagnostic::error(
+                        Code::ConfigInvalid,
+                        format!("cannot write `{}`: {e}", path.display()),
+                    )
+                );
+                return ExitCode::Usage.code();
+            }
+            eprintln!("cite: wrote {}", path.display());
+            if args.open {
+                open_in_browser(&path);
+            }
+            ExitCode::Success.code()
+        }
+    }
+}
+
+/// Best-effort `open` — failure to launch a browser must not fail the command.
+fn open_in_browser(path: &std::path::Path) {
+    #[cfg(target_os = "macos")]
+    let program = "open";
+    #[cfg(not(target_os = "macos"))]
+    let program = "xdg-open";
+    if let Err(e) = std::process::Command::new(program).arg(path).spawn() {
+        eprintln!("cite: could not open `{}`: {e}", path.display());
     }
 }
 

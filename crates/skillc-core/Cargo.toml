@@ -54,3 +54,7 @@ path = "../../tests/integration/maintainer_tooling.rs"
 [[test]]
 name = "nested_discovery"
 path = "../../tests/integration/nested_discovery.rs"
+
+[[test]]
+name = "graph_cmd"
+path = "../../tests/integration/graph_cmd.rs"
