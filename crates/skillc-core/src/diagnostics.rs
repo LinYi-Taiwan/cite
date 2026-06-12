@@ -41,6 +41,8 @@ pub enum Code {
     ReferenceStray,
     /// A `sharedReferences` stem equal to a registered target name (Edge Cases).
     ReferenceSharedCollision,
+    /// A catalog entry skipped during discovery (e.g. a symlink — never followed).
+    CatalogSkipped,
 }
 
 impl Code {
@@ -61,6 +63,7 @@ impl Code {
             Self::EntryEmpty => "entry/empty",
             Self::ReferenceStray => "reference/stray",
             Self::ReferenceSharedCollision => "reference/shared-collision",
+            Self::CatalogSkipped => "catalog/skipped",
         }
     }
 

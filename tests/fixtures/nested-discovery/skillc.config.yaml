@@ -1,0 +1,5 @@
+targets:
+  demo:
+    entry:
+      mounts: [composer]
+agents: [claude]

@@ -50,3 +50,7 @@ path = "../../tests/integration/loadable_skill.rs"
 [[test]]
 name = "maintainer_tooling"
 path = "../../tests/integration/maintainer_tooling.rs"
+
+[[test]]
+name = "nested_discovery"
+path = "../../tests/integration/nested_discovery.rs"

@@ -3,11 +3,13 @@
 //! Catalog layout convention:
 //! ```text
 //! <catalog>/
-//! ├── skills/<skill-dir>/SKILL.md          # one skill per dir
-//! │                      references/<stem>.md
-//! └── blocks/<block-id>.md                  # one reusable block per file
+//! ├── skills/<...>/<skill-dir>/SKILL.md     # one skill per dir, at any depth
+//! │                            references/<stem>.md
+//! └── blocks/<...>/<block-id>.md            # one reusable block per file, at any depth
 //! ```
 //! The skill's `id` is taken from its frontmatter; the block's id is its filename stem.
+//! Intermediate directories are free-form grouping (by layer, team, domain — the
+//! compiler imposes no taxonomy); ids must stay unique across the whole catalog.
 //!
 //! `@include` extraction (T014) and `{{Alias}}` extraction (T021) populate the
 //! `includes`/`markers` fields; this stage leaves them empty until those modules land.
@@ -33,19 +35,62 @@ pub fn parse_catalog(catalog: &Path, diags: &mut Diagnostics) -> Catalog {
     cat
 }
 
+/// Discovery never descends deeper than this below `skills/` / `blocks/` — a bound on
+/// stack recursion so an adversarial mirrored repo cannot crash the compiler with a
+/// pathologically deep tree.
+const MAX_NESTING: usize = 32;
+
 fn parse_blocks(catalog: &Path, cat: &mut Catalog, diags: &mut Diagnostics) {
     let blocks_dir = catalog.join("blocks");
     if !blocks_dir.is_dir() {
         return;
     }
-    let entries = match read_dir_sorted(&blocks_dir) {
+    walk_blocks(&blocks_dir, cat, diags, 0);
+}
+
+/// Recursively collect `*.md` blocks under `dir`. Subdirectories are organizational
+/// groupings the author chose — the compiler imposes no taxonomy. A block's id is its
+/// filename stem regardless of depth, so two files with the same stem in different
+/// groups collide (`duplicate block id`), keeping `@include <id>` unambiguous.
+/// Hidden (dot-prefixed) entries and symlinks are skipped (symlinks are never
+/// followed, mirroring the lockfile hash walk — a mirrored repo must not be able to
+/// point discovery outside the catalog).
+fn walk_blocks(dir: &Path, cat: &mut Catalog, diags: &mut Diagnostics, depth: usize) {
+    if depth > MAX_NESTING {
+        diags.error(
+            Code::SchemaInvalid,
+            format!(
+                "catalog nesting exceeds {MAX_NESTING} levels at {}",
+                dir.display()
+            ),
+        );
+        return;
+    }
+    let entries = match read_dir_sorted(dir) {
         Ok(e) => e,
         Err(e) => {
-            diags.error(Code::ConfigInvalid, format!("cannot read blocks dir: {e}"));
+            diags.error(
+                Code::ConfigInvalid,
+                format!("cannot read blocks dir {}: {e}", dir.display()),
+            );
             return;
         }
     };
     for path in entries {
+        if is_hidden(&path) {
+            continue;
+        }
+        if is_symlink(&path) {
+            diags.warning(
+                Code::CatalogSkipped,
+                format!("symlink skipped during block discovery: {}", path.display()),
+            );
+            continue;
+        }
+        if path.is_dir() {
+            walk_blocks(&path, cat, diags, depth + 1);
+            continue;
+        }
         if path.extension().and_then(|s| s.to_str()) != Some("md") {
             continue;
         }
@@ -91,22 +136,62 @@ fn parse_skills(catalog: &Path, cat: &mut Catalog, diags: &mut Diagnostics) {
     if !skills_dir.is_dir() {
         return;
     }
-    let dirs = match read_dir_sorted(&skills_dir) {
+    walk_skills(&skills_dir, cat, diags, 0);
+}
+
+/// Recursively discover skills under `dir`. A directory containing a `SKILL.md` is a
+/// skill — its subdirectories (`references/`, `scripts/`, …) belong to it and are not
+/// descended into. Any other directory is an organizational grouping the author chose
+/// (by layer, by team, by domain — the compiler imposes no taxonomy) and is recursed.
+/// Hidden (dot-prefixed) directories and symlinks are skipped (symlinks are never
+/// followed — a mirrored repo must not be able to point discovery outside the
+/// catalog). Skill ids stay globally unique regardless of grouping (`duplicate skill
+/// id` otherwise), so imports and `dist/` output are unaffected by how the tree is
+/// organized.
+fn walk_skills(dir: &Path, cat: &mut Catalog, diags: &mut Diagnostics, depth: usize) {
+    if depth > MAX_NESTING {
+        diags.error(
+            Code::SchemaInvalid,
+            format!(
+                "catalog nesting exceeds {MAX_NESTING} levels at {}",
+                dir.display()
+            ),
+        );
+        return;
+    }
+    let dirs = match read_dir_sorted(dir) {
         Ok(e) => e,
         Err(e) => {
-            diags.error(Code::ConfigInvalid, format!("cannot read skills dir: {e}"));
+            diags.error(
+                Code::ConfigInvalid,
+                format!("cannot read skills dir {}: {e}", dir.display()),
+            );
             return;
         }
     };
-    for dir in dirs {
-        if !dir.is_dir() {
+    for entry in dirs {
+        if is_hidden(&entry) {
             continue;
         }
-        let skill_md = dir.join("SKILL.md");
+        if is_symlink(&entry) {
+            diags.warning(
+                Code::CatalogSkipped,
+                format!(
+                    "symlink skipped during skill discovery: {}",
+                    entry.display()
+                ),
+            );
+            continue;
+        }
+        if !entry.is_dir() {
+            continue;
+        }
+        let skill_md = entry.join("SKILL.md");
         if !skill_md.is_file() {
+            walk_skills(&entry, cat, diags, depth + 1);
             continue;
         }
-        match parse_one_skill(&dir, &skill_md, diags) {
+        match parse_one_skill(&entry, &skill_md, diags) {
             Some(skill) => {
                 if cat.skills.contains_key(&skill.id) {
                     diags.error(
@@ -124,6 +209,19 @@ fn parse_skills(catalog: &Path, cat: &mut Catalog, diags: &mut Diagnostics) {
             None => continue,
         }
     }
+}
+
+/// True when the final path component starts with a dot (`.git`, `.DS_Store`, …).
+fn is_hidden(path: &Path) -> bool {
+    path.file_name()
+        .and_then(|s| s.to_str())
+        .is_some_and(|n| n.starts_with('.'))
+}
+
+/// True when the entry itself is a symlink (checked WITHOUT following it —
+/// `Path::is_dir` resolves through symlinks and must not be trusted alone).
+fn is_symlink(path: &Path) -> bool {
+    std::fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_symlink())
 }
 
 fn parse_one_skill(dir: &Path, skill_md: &Path, diags: &mut Diagnostics) -> Option<Skill> {
