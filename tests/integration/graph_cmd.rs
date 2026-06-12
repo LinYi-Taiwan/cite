@@ -130,6 +130,22 @@ fn unknown_focus_is_a_usage_error() {
 }
 
 #[test]
+fn unknown_target_is_a_usage_error() {
+    let opts = GraphOptions {
+        catalog: common::fixture("us2-markers-deps"),
+        config: None,
+        format: GraphFormat::Json,
+        target: Some("nope".into()),
+        focus: None,
+        depth: 1,
+    };
+    assert!(matches!(
+        skillc_core::run_graph(&opts),
+        Err(skillc_core::PipelineError::Usage(_))
+    ));
+}
+
+#[test]
 fn text_renderings_carry_the_same_graph() {
     let dot = graph("us2-markers-deps", GraphFormat::Dot, None, None);
     assert!(dot.starts_with("digraph"));

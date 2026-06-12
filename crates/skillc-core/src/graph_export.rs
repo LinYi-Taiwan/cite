@@ -16,6 +16,7 @@ use std::path::Path;
 use serde::Serialize;
 
 use crate::config::FrameworkConfig;
+use crate::graph::transitive_blocks;
 use crate::model::{Catalog, ReferenceKind};
 use crate::resolve::Resolution;
 use crate::shake;
@@ -513,7 +514,7 @@ fn render_dot(export: &GraphExport) -> String {
             let _ = writeln!(
                 s,
                 "    \"{}\" [fillcolor=\"{}\"{fontcolor}{dashed}{outline}];",
-                n.id,
+                dot_escape(&n.id),
                 layer_fill(n.layer)
             );
         }
@@ -529,14 +530,15 @@ fn render_dot(export: &GraphExport) -> String {
                 "solid",
                 e.alias
                     .as_ref()
-                    .map(|a| format!(", label=\"{a}\", fontsize=9"))
+                    .map(|a| format!(", label=\"{}\", fontsize=9", dot_escape(a)))
                     .unwrap_or_default(),
             ),
         };
         let _ = writeln!(
             s,
             "  \"{}\" -> \"{}\" [style={style}{extra}];",
-            e.from, e.to
+            dot_escape(&e.from),
+            dot_escape(&e.to)
         );
     }
     s.push_str("}\n");
@@ -567,7 +569,7 @@ fn render_mermaid(export: &GraphExport) -> String {
         }
         let _ = writeln!(s, "  subgraph {title}");
         for n in members {
-            let _ = writeln!(s, "    {}[\"{}\"]", ident(&n.id), n.id);
+            let _ = writeln!(s, "    {}[\"{}\"]", ident(&n.id), mermaid_text(&n.id));
         }
         let _ = writeln!(s, "  end");
     }
@@ -577,7 +579,7 @@ fn render_mermaid(export: &GraphExport) -> String {
             "includes" => "-.->".to_string(),
             "hosts" => "---".to_string(),
             _ => match &e.alias {
-                Some(a) => format!("-- {a} -->"),
+                Some(a) => format!("-- {} -->", mermaid_text(a)),
                 None => "-->".to_string(),
             },
         };
@@ -599,13 +601,29 @@ fn render_mermaid(export: &GraphExport) -> String {
     s
 }
 
+/// Escape a string for a DOT double-quoted string (id, label, tooltip). Current unit-id
+/// rules make `"` unreachable, but the renderer must not depend on that staying true.
+fn dot_escape(s: &str) -> String {
+    s.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
+/// Escape a string for Mermaid label/edge-text positions (Mermaid uses `#...;` entities).
+fn mermaid_text(s: &str) -> String {
+    s.replace('"', "#quot;")
+        .replace('<', "#lt;")
+        .replace('>', "#gt;")
+}
+
 /// The self-contained viewer: the template ships inside the binary; the export is
-/// embedded as JSON (with `</` escaped so a description can't close the script tag).
+/// embedded as JSON. `</` is escaped so a description can't close the script tag, and
+/// `<!--` so an XML-mode parser can't treat it as a script-block terminator either;
+/// HTML-escaping of field values is the viewer's job at its innerHTML sinks.
 fn render_html(export: &GraphExport) -> String {
     const TEMPLATE: &str = include_str!("../assets/graph.html");
     let json = serde_json::to_string(export)
         .expect("export serializes")
-        .replace("</", "<\\/");
+        .replace("</", "<\\/")
+        .replace("<!--", "<\\!--");
     TEMPLATE.replace("__GRAPH_JSON__", &json)
 }
 
@@ -654,25 +672,7 @@ fn reachable_from_skills(catalog: &Catalog) -> BTreeSet<String> {
         .values()
         .flat_map(|s| s.includes.iter().cloned())
         .collect();
-    transitive_blocks_from(catalog, roots)
-}
-
-/// All blocks reachable from `roots` through nested block `@include`s.
-fn transitive_blocks(catalog: &Catalog, roots: &[String]) -> BTreeSet<String> {
-    transitive_blocks_from(catalog, roots.to_vec())
-}
-
-fn transitive_blocks_from(catalog: &Catalog, roots: Vec<String>) -> BTreeSet<String> {
-    let mut seen = BTreeSet::new();
-    let mut stack = roots;
-    while let Some(b) = stack.pop() {
-        if let Some(block) = catalog.blocks.get(&b) {
-            if seen.insert(b) {
-                stack.extend(block.includes.iter().cloned());
-            }
-        }
-    }
-    seen
+    transitive_blocks(catalog, &roots)
 }
 
 fn sorted(set: Option<&BTreeSet<String>>) -> Vec<String> {

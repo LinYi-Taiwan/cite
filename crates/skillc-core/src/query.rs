@@ -6,10 +6,11 @@
 //! the same parse/resolve/shake passes as `build`, so the answer is the compiler's truth,
 //! not a text-match approximation.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::fmt::Write as _;
 
 use crate::config::FrameworkConfig;
+use crate::graph::transitive_blocks;
 use crate::model::Catalog;
 use crate::resolve::Resolution;
 use crate::shake;
@@ -180,20 +181,6 @@ fn why_skill(
     push_list(&mut text, "inlines blocks", &blocks);
     push_list(&mut text, "imports skills", &imports);
     WhyReport { text }
-}
-
-/// All blocks reachable from `roots` through nested block `@include`s.
-fn transitive_blocks(catalog: &Catalog, roots: &[String]) -> BTreeSet<String> {
-    let mut seen = BTreeSet::new();
-    let mut stack: Vec<String> = roots.to_vec();
-    while let Some(b) = stack.pop() {
-        if let Some(block) = catalog.blocks.get(&b) {
-            if seen.insert(b) {
-                stack.extend(block.includes.iter().cloned());
-            }
-        }
-    }
-    seen
 }
 
 /// For each target, the subset of `skills` its bundle membership contains, annotated with

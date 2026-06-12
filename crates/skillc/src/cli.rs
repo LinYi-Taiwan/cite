@@ -291,10 +291,16 @@ fn run_graph_cmd(args: GraphArgs) -> i32 {
 /// Best-effort `open` — failure to launch a browser must not fail the command.
 fn open_in_browser(path: &std::path::Path) {
     #[cfg(target_os = "macos")]
-    let program = "open";
-    #[cfg(not(target_os = "macos"))]
-    let program = "xdg-open";
-    if let Err(e) = std::process::Command::new(program).arg(path).spawn() {
+    let (program, args): (&str, &[&str]) = ("open", &[]);
+    #[cfg(target_os = "windows")]
+    let (program, args): (&str, &[&str]) = ("cmd", &["/c", "start", ""]);
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    let (program, args): (&str, &[&str]) = ("xdg-open", &[]);
+    if let Err(e) = std::process::Command::new(program)
+        .args(args)
+        .arg(path)
+        .spawn()
+    {
         eprintln!("cite: could not open `{}`: {e}", path.display());
     }
 }

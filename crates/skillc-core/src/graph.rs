@@ -115,6 +115,21 @@ fn describe_cycle(g: &DiGraph<&str, ()>, start: NodeIndex) -> String {
     names.join(" → ")
 }
 
+/// All blocks reachable from `roots` through nested block `@include`s. Shared by the
+/// `why` and `graph` queries (block shipping is defined identically in both).
+pub(crate) fn transitive_blocks(catalog: &Catalog, roots: &[String]) -> BTreeSet<String> {
+    let mut seen = BTreeSet::new();
+    let mut stack: Vec<String> = roots.to_vec();
+    while let Some(b) = stack.pop() {
+        if let Some(block) = catalog.blocks.get(&b) {
+            if seen.insert(b) {
+                stack.extend(block.includes.iter().cloned());
+            }
+        }
+    }
+    seen
+}
+
 /// The set of block ids reachable from some skill's `@include`s (transitively).
 fn reachable_blocks(catalog: &Catalog) -> BTreeSet<&str> {
     let mut seen = BTreeSet::new();
