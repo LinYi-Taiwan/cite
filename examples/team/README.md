@@ -34,11 +34,11 @@ examples/team/
 
 ```bash
 # 編 web 專案
-target/release/skillc build --target web --agent claude \
+target/release/cite build --target web --agent claude \
   --catalog examples/team --out examples/team/dist
 
 # 編 api 專案
-target/release/skillc build --target api --agent claude \
+target/release/cite build --target api --agent claude \
   --catalog examples/team --out examples/team/dist
 ```
 
@@ -62,8 +62,8 @@ ls examples/team/dist/api/claude/skills/backend-coding/references    # api.md
 
 # 3) 改一次、全部同步：只改共用片段，不碰任何 skill
 echo '- 新規則範例。' >> examples/team/blocks/commit-format.md
-target/release/skillc build --target web --agent claude --catalog examples/team --out examples/team/dist
-target/release/skillc build --target api --agent claude --catalog examples/team --out examples/team/dist
+target/release/cite build --target web --agent claude --catalog examples/team --out examples/team/dist
+target/release/cite build --target api --agent claude --catalog examples/team --out examples/team/dist
 grep -c '新規則範例' examples/team/dist/web/claude/skills/frontend-coding/SKILL.md   # → 1
 grep -c '新規則範例' examples/team/dist/api/claude/skills/backend-coding/SKILL.md    # → 1
 ```
@@ -79,6 +79,6 @@ grep -c '新規則範例' examples/team/dist/api/claude/skills/backend-coding/SK
 把編好的成品放進某個 agent 目錄（可重複執行，idempotent）：
 
 ```bash
-target/release/skillc install \
+target/release/cite install \
   --artifact examples/team/dist/web/claude --dest ~/somewhere/.claude
 ```

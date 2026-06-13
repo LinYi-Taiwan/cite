@@ -12,10 +12,54 @@ The compiler is also the validator: non-conforming or unresolvable input does no
 A complete runnable example lives in [`examples/team/`](examples/team/) — two targets,
 a shared block, per-target references, committed `dist/`.
 
+> The installed binary is **`cite`**. (`skillc` is the framework/crate name; the command
+> you run is `cite`.)
+
+## Use cases
+
+Reach for `cite` when skill/prompt content is being copy-pasted across repos, agents, or
+projects and drifting out of sync. Concretely:
+
+- **One standard, many agents.** Author a coding-standard skill once and ship it to
+  Claude, Codex, Cursor, Gemini, and Copilot — each gets the layout it expects, from the
+  same source (`cite build --all-agents`, then `cite install`).
+- **Change-once, sync-everywhere shared content.** A commit convention, review checklist,
+  or glossary lives in one block; every skill pulls it with `@include`. Edit the block,
+  recompile, all consumers update — no hand-copying.
+- **Per-project variants of the same skill.** One skill, different notes per project via
+  per-target references — `cite` keeps only the current target's reference and prunes the rest.
+- **Cross-repo reuse.** Import a skill or block from another catalog repo (`imports:` +
+  `skills-lock.json`); it's pulled into the bundle and deduped, npm-style.
+- **Review what agents actually receive.** Builds are byte-deterministic, so a committed
+  `dist/` diffs like a lockfile in PR review — you see exactly what every agent will load.
+- **Know the blast radius before editing.** `cite why <id>` shows every skill/target that
+  depends on a block before you touch it; `cite graph` renders the whole catalog.
+
+## Quick start
+
+Try it against the bundled example (no setup beyond the binary):
+
+```bash
+# Compile the example's `web` target for the `claude` agent
+cite build --target web --agent claude --catalog examples/team --out /tmp/cite-demo
+
+# The @include block is already inlined into the artifact, {{Alias}} pointers resolved
+cat /tmp/cite-demo/web/claude/skills/frontend-coding/SKILL.md
+
+# Validate the whole catalog without writing anything (the CI / pre-commit gate)
+cite check --catalog examples/team
+
+# Who depends on the shared block?
+cite why commit-format --catalog examples/team
+```
+
+Then point `--catalog` at your own directory laid out as below, or copy `examples/team/`
+as a starting skeleton.
+
 ## Build
 
 ```bash
-cargo build --release      # -> target/release/skillc
+cargo build --release      # -> target/release/cite
 ```
 
 Toolchain: Rust (stable). The crates declare an MSRV of 1.83; current dependency
@@ -99,10 +143,10 @@ when compiling that target; foreign-target references are pruned.
 
 ## Commands
 
-### `skillc build`
+### `cite build`
 
 ```bash
-skillc build --target <T> --agent <A> [--catalog <dir>] [--config <file>] [--out <dir>]
+cite build --target <T> --agent <A> [--catalog <dir>] [--config <file>] [--out <dir>]
              [--all-targets] [--all-agents] [--locked] [--frozen]
 ```
 
@@ -128,26 +172,26 @@ dist/<target>/<agent>/
 
 **Exit codes**: `0` success (warnings allowed), `1` hard failure, `2` usage error.
 
-### `skillc check`
+### `cite check`
 
 ```bash
-skillc check [--target <T>] [--catalog <dir>] [--config <file>] [--locked] [--frozen]
+cite check [--target <T>] [--catalog <dir>] [--config <file>] [--locked] [--frozen]
 ```
 
 Validates the whole catalog — schema, includes, markers, imports, entries, per-target
 references — **without writing any artifact**. Default scope is every registered target.
 This is the CI / pre-commit gate; exit codes match `build`.
 
-### `skillc why`
+### `cite why`
 
 ```bash
-skillc why <skill-or-block-id> [--catalog <dir>] [--config <file>]
+cite why <skill-or-block-id> [--catalog <dir>] [--config <file>]
 ```
 
 The reverse-dependency query — answers what a maintainer must know before touching a unit:
 
 ```text
-$ skillc why pr-rules
+$ cite why pr-rules
 block `pr-rules`
   directly included by skills: frontend-coding, git
   directly included by blocks: (none)
@@ -161,10 +205,10 @@ Works for blocks, catalog skills, and external (cross-repo pulled) skills. The a
 computed from the compiler's own resolution — not a text grep — so it matches what `build`
 ships. Unknown ids exit `2` and print the catalog inventory.
 
-### `skillc graph`
+### `cite graph`
 
 ```bash
-skillc graph [--format html|json|dot|mermaid] [--target <T>] [--focus <id>] [--depth <N>]
+cite graph [--format html|json|dot|mermaid] [--target <T>] [--focus <id>] [--depth <N>]
              [--out <file>] [--open] [--catalog <dir>] [--config <file>]
 ```
 
@@ -186,10 +230,10 @@ across commits to see what a PR makes a target ship; `dot` pipes into graphviz a
 `--focus <id> --depth <N>` cuts the neighborhood around one unit. Like `why`, the answer
 is computed from the compiler's own resolution, so it matches what `build` ships.
 
-### `skillc install`
+### `cite install`
 
 ```bash
-skillc install --artifact dist/<target>/<agent> --dest <agent-dir> [--agent <A>]
+cite install --artifact dist/<target>/<agent> --dest <agent-dir> [--agent <A>]
 ```
 
 Places a built artifact into an agent destination (separate, idempotent step).
@@ -212,7 +256,7 @@ already uses (`skills/<id>/SKILL.md`), so `--dest` is just each agent's skills r
 | gemini | `.gemini` (or `.agents` alias) | `~/.gemini` | <https://geminicli.com/docs/cli/skills/> |
 | copilot | `.github` | — | GitHub Docs: Agent Skills at `.github/skills/<name>/SKILL.md` |
 
-e.g. `skillc install --artifact dist/web/cursor --dest path/to/repo/.cursor` yields
+e.g. `cite install --artifact dist/web/cursor --dest path/to/repo/.cursor` yields
 `path/to/repo/.cursor/skills/<id>/SKILL.md`.
 
 ## Team adoption
@@ -223,21 +267,21 @@ The intended workflow for a team running one skill catalog across N repos/machin
    Skill edits go through normal PR review there.
 2. **Commit `dist/`** in the catalog repo. Builds are byte-deterministic, so the diff of
    `dist/` in a PR shows exactly what every agent will receive — reviewable like a
-   lockfile. (Regenerate with `skillc build --all-targets --all-agents` before pushing;
+   lockfile. (Regenerate with `cite build --all-targets --all-agents` before pushing;
    never hand-edit `dist/`, rebuilds silently overwrite it.)
 3. **CI gate** on the catalog repo:
 
    ```yaml
-   - run: skillc check --locked --frozen            # validates everything, writes nothing
-   - run: skillc build --all-targets --all-agents --locked --frozen
+   - run: cite check --locked --frozen            # validates everything, writes nothing
+   - run: cite build --all-targets --all-agents --locked --frozen
    - run: git diff --exit-code dist/                # committed dist must match the sources
    ```
 
 4. **Consumers** (developer machines, other repos' CI) install from the committed
-   artifact: `skillc install --artifact dist/<target>/<agent> --dest <agent-root>`.
+   artifact: `cite install --artifact dist/<target>/<agent> --dest <agent-root>`.
    Re-running install is idempotent and retires skills the catalog dropped (see the
    receipt above) — so "update" is just pull + install.
-5. Before refactoring a shared block or removing a skill, run `skillc why <id>` to see
+5. Before refactoring a shared block or removing a skill, run `cite why <id>` to see
    the blast radius.
 
 ## Determinism
