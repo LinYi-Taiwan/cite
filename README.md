@@ -176,9 +176,11 @@ Health flags (`orphan` skills, `unused` blocks, `stray` references) are attached
 nodes, so the graph doubles as a catalog health dashboard.
 
 The default `html` format writes a self-contained viewer to `<catalog>/dist/graph.html`
-(no server, no dependencies — `--open` launches it): layered swim-lanes, per-target
-filtering, search, and a click-through detail panel showing each node's inline `why`
-report. `json` is the canonical machine-readable export (stdout by default) — diff it
+(no server, no dependencies — `--open` launches it). It opens in **Explorer** mode:
+search/pick one skill and walk an expandable dependency tree — what it imports (and
+transitively), or flip direction to see what imports it — instead of staring at the whole
+graph at once. The **Graph** tab keeps the layered swim-lane overview (per-target filter,
+search, click-through detail panel). Both share the same click → inline `why` detail panel. `json` is the canonical machine-readable export (stdout by default) — diff it
 across commits to see what a PR makes a target ship; `dot` pipes into graphviz and
 `mermaid` pastes into a PR description. `--target` restricts to one bundle's closure;
 `--focus <id> --depth <N>` cuts the neighborhood around one unit. Like `why`, the answer

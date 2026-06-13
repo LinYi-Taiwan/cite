@@ -43,18 +43,70 @@
   .edge.dim { opacity:.06; }
   .rowlabel { font-size:10px; fill:#aaa; text-transform:uppercase; letter-spacing:.08em; }
   #empty { position:absolute; top:50%; left:40%; color:#999; display:none; }
+
+  /* mode tabs */
+  .modes { display:flex; gap:2px; }
+  .mode { border:1px solid #ccc; background:#fff; font:inherit; font-size:12px; padding:3px 12px; cursor:pointer; }
+  .mode:first-child { border-radius:6px 0 0 6px; }
+  .mode:last-child { border-radius:0 6px 6px 0; border-left:none; }
+  .mode.on { background:var(--page); color:#fff; border-color:var(--page); }
+  .dir { display:flex; gap:2px; }
+  .dir button { border:1px solid #ccc; background:#fff; font:inherit; font-size:12px; padding:3px 10px; cursor:pointer; }
+  .dir button:first-child { border-radius:6px 0 0 6px; }
+  .dir button:last-child { border-radius:0 6px 6px 0; border-left:none; }
+  .dir button.on { background:var(--organism); color:#fff; border-color:var(--organism); }
+
+  /* mode visibility */
+  body.mode-explorer #canvas, body.mode-explorer .graph-only { display:none; }
+  body.mode-graph #explorer, body.mode-graph .exp-only { display:none; }
+
+  /* explorer tree */
+  #explorer { flex:1; min-width:0; overflow:auto; padding:12px 18px; }
+  #explorer .hint { color:#999; margin:4px 0 12px; }
+  #explorer .crumb { margin-bottom:10px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  #explorer .crumb button { border:none; background:none; font:inherit; color:var(--template); cursor:pointer; padding:0; }
+  #explorer .crumb button:hover { text-decoration:underline; }
+  #explorer .crumb .cur { font-weight:600; color:var(--ink); }
+  .landing { columns:3 240px; column-gap:24px; }
+  .landing .lgroup { break-inside:avoid; margin-bottom:14px; }
+  .landing .lgroup h4 { font-size:10px; text-transform:uppercase; letter-spacing:.08em; color:#aaa; margin:0 0 4px; }
+  .landing .litem { display:flex; align-items:center; gap:6px; width:100%; border:none; background:none; font:inherit; text-align:left; padding:2px 4px; cursor:pointer; border-radius:4px; }
+  .landing .litem:hover { background:#eef0ec; }
+  .dot { width:9px; height:9px; border-radius:50%; flex:none; }
+  ul.ttree, ul.tkids { list-style:none; margin:0; padding:0; }
+  ul.tkids { padding-left:18px; border-left:1px solid #e7e7e1; margin-left:7px; }
+  .trow { display:flex; align-items:center; gap:6px; padding:3px 4px; border-radius:4px; }
+  .trow:hover { background:#eef0ec; }
+  .trow.root { background:#e8edf1; }
+  .tri { width:14px; flex:none; cursor:pointer; color:#888; text-align:center; user-select:none; }
+  .tri.leaf { cursor:default; color:transparent; }
+  .tname { border:none; background:none; font:inherit; cursor:pointer; padding:0; color:var(--ink); word-break:break-all; text-align:left; }
+  .tname:hover { text-decoration:underline; }
+  .tname.ext { font-style:italic; }
+  .tbadge { font-size:10px; color:#999; flex:none; }
+  .tflag { font-size:10px; color:#c1121f; flex:none; }
+  .tcycle { font-size:10px; color:#c47f17; flex:none; }
 </style>
 </head>
-<body>
+<body class="mode-explorer">
 <header>
   <h1>cite graph</h1>
-  <div class="chips" id="targets"></div>
-  <input id="search" type="search" placeholder="filter by id…">
-  <label class="toggle"><input type="checkbox" id="show-refs"> references</label>
-  <label class="toggle"><input type="checkbox" id="show-atoms" checked> atoms</label>
-  <div id="legend"></div>
+  <div class="modes">
+    <button type="button" class="mode on" data-mode="explorer">Explorer</button>
+    <button type="button" class="mode" data-mode="graph">Graph</button>
+  </div>
+  <input id="search" type="search" placeholder="search a skill…">
+  <div class="dir exp-only" id="dir">
+    <button type="button" data-dir="out" class="on">imports →</button>
+    <button type="button" data-dir="in">← imported by</button>
+  </div>
+  <div class="chips graph-only" id="targets"></div>
+  <label class="toggle graph-only"><input type="checkbox" id="show-refs"> references</label>
+  <label class="toggle graph-only"><input type="checkbox" id="show-atoms" checked> atoms</label>
+  <div id="legend" class="graph-only"></div>
 </header>
 <main>
+  <div id="explorer"></div>
   <svg id="canvas"></svg>
   <aside id="panel"></aside>
   <div id="empty">no nodes match the current filters</div>
@@ -78,7 +130,18 @@ const EDGE_STYLE = {
 };
 
 const nodesById = new Map(GRAPH.nodes.map(n => [n.id, n]));
-const state = { target:null, query:"", showRefs:false, showAtoms:true, selected:null };
+const state = { mode:"explorer", dir:"out", root:null, target:null, query:"", showRefs:false, showAtoms:true, selected:null };
+
+// Adjacency, built once. outEdges[id] = edges leaving id (what it depends on);
+// inEdges[id] = edges arriving at id (what depends on it).
+const outEdges = new Map(), inEdges = new Map();
+const pushMap = (m,k,v) => { const a = m.get(k); if (a) a.push(v); else m.set(k,[v]); };
+for (const e of GRAPH.edges){ pushMap(outEdges, e.from, e); pushMap(inEdges, e.to, e); }
+// Edges in the active direction, as {child, edge} pairs.
+function childPairs(id, dir){
+  const es = (dir==="out" ? outEdges.get(id) : inEdges.get(id)) || [];
+  return es.map(e => ({ child: dir==="out" ? e.to : e.from, edge: e }));
+}
 
 // ---------- header ----------
 const targetNames = GRAPH.nodes.filter(n => n.kind==="target").map(n => n.id);
@@ -112,9 +175,31 @@ if (GRAPH.nodes.some(n => n.external)) {
   legendEl.appendChild(s);
 }
 
-document.getElementById("search").oninput = e => { state.query = e.target.value.trim().toLowerCase(); update(); };
+document.getElementById("search").oninput = e => {
+  state.query = e.target.value.trim().toLowerCase();
+  if (state.mode === "explorer"){ state.root = null; renderExplorer(); } else { update(); }
+};
 document.getElementById("show-refs").onchange = e => { state.showRefs = e.target.checked; update(); };
 document.getElementById("show-atoms").onchange = e => { state.showAtoms = e.target.checked; update(); };
+
+// ---------- mode + direction switching ----------
+for (const b of document.querySelectorAll(".mode")){
+  b.onclick = () => setMode(b.dataset.mode);
+}
+for (const b of document.querySelectorAll("#dir button")){
+  b.onclick = () => {
+    state.dir = b.dataset.dir;
+    for (const x of document.querySelectorAll("#dir button")) x.classList.toggle("on", x===b);
+    renderExplorer();
+  };
+}
+function setMode(mode){
+  state.mode = mode;
+  document.body.classList.toggle("mode-explorer", mode==="explorer");
+  document.body.classList.toggle("mode-graph", mode==="graph");
+  for (const b of document.querySelectorAll(".mode")) b.classList.toggle("on", b.dataset.mode===mode);
+  if (mode==="explorer") renderExplorer(); else update();
+}
 
 // ---------- filtering ----------
 function visibleNodes(){
@@ -192,6 +277,7 @@ function el(name, attrs, parent){
 }
 
 function update(){
+  if (state.mode !== "graph") return; // graph is hidden in explorer mode — skip the work
   svg.innerHTML = "";
   const nodes = visibleNodes();
   const visIds = new Set(nodes.map(n => n.id));
@@ -325,12 +411,197 @@ function select(id){
     ${group(inn, "in")}${group(out, "out")}
   `;
   panel.classList.add("open");
-  panel.querySelectorAll("[data-nav]").forEach(a => a.onclick = () => select(a.dataset.nav));
+  panel.querySelectorAll("[data-nav]").forEach(a => a.onclick = () => navTo(a.dataset.nav));
   panel.querySelector("[data-close]").onclick = () => select(null);
   update();
 }
 
-update();
+// Navigate to a node: in explorer mode also re-root the tree there so panel links
+// and the tree stay in sync; in graph mode just select.
+function navTo(id){
+  if (state.mode === "explorer" && nodesById.has(id)) setRoot(id);
+  else select(id);
+}
+
+// ---------- explorer (search → expandable dependency tree) ----------
+const explorerEl = document.getElementById("explorer");
+
+function dot(layer, external){
+  const d = document.createElement("span");
+  d.className = "dot";
+  d.style.background = FILL[layer] || "#ccc";
+  if (external){ d.style.background = "#fff"; d.style.border = "1.5px dashed #555"; }
+  return d;
+}
+
+function setRoot(id){
+  state.root = id;
+  renderExplorer();
+  select(id); // also surface full detail in the side panel
+}
+
+function renderExplorer(){
+  explorerEl.innerHTML = "";
+  if (!state.root){ renderLanding(); return; }
+  if (!nodesById.has(state.root)){ state.root = null; renderLanding(); return; }
+
+  const n = nodesById.get(state.root);
+  const crumb = document.createElement("div");
+  crumb.className = "crumb";
+  const back = document.createElement("button");
+  back.type = "button"; back.textContent = "← all skills";
+  back.onclick = () => { state.root = null; renderExplorer(); };
+  const cur = document.createElement("span");
+  cur.className = "cur"; cur.textContent = n.id;
+  const dirLabel = document.createElement("span");
+  dirLabel.style.color = "#999";
+  dirLabel.textContent = state.dir === "out" ? "— what it depends on" : "— what depends on it";
+  crumb.append(back, document.createTextNode("/"), cur, dirLabel);
+  explorerEl.appendChild(crumb);
+
+  const tree = document.createElement("ul");
+  tree.className = "ttree";
+  tree.appendChild(rootRow(n));
+  explorerEl.appendChild(tree);
+}
+
+// The root node's own row, expanded by default.
+function rootRow(n){
+  const li = document.createElement("li");
+  const row = document.createElement("div");
+  row.className = "trow root";
+  row.append(triPlaceholder(), dot(n.layer, n.external), nameBtn(n, true), ...badges(n, null));
+  li.appendChild(row);
+  const kids = document.createElement("ul");
+  kids.className = "tkids";
+  const pairs = childPairs(n.id, state.dir);
+  if (!pairs.length){
+    const empty = document.createElement("li");
+    empty.style.color = "#999"; empty.style.padding = "3px 4px";
+    empty.textContent = state.dir === "out" ? "(depends on nothing)" : "(nothing depends on it)";
+    kids.appendChild(empty);
+  } else {
+    const anc = new Set([n.id]);
+    for (const p of pairs) kids.appendChild(treeRow(p.child, p.edge, anc));
+  }
+  li.appendChild(kids);
+  return li;
+}
+
+// A child row: lazy-expandable, cycle-guarded against its ancestor path.
+function treeRow(id, edge, ancestors){
+  const n = nodesById.get(id);
+  const li = document.createElement("li");
+  const row = document.createElement("div");
+  row.className = "trow";
+
+  const pairs = childPairs(id, state.dir);
+  const cycle = ancestors.has(id);
+  const expandable = pairs.length > 0 && !cycle;
+
+  const tri = document.createElement("span");
+  tri.className = "tri" + (expandable ? "" : " leaf");
+  tri.textContent = expandable ? "▸" : "•";
+
+  row.append(tri, dot(n ? n.layer : "reference", n && n.external), nameBtn(n || {id}, false), ...badges(n, edge, cycle));
+  li.appendChild(row);
+
+  const kids = document.createElement("ul");
+  kids.className = "tkids";
+  kids.style.display = "none";
+  li.appendChild(kids);
+
+  let built = false;
+  tri.onclick = () => {
+    if (!expandable) return;
+    const open = kids.style.display !== "none";
+    kids.style.display = open ? "none" : "block";
+    tri.textContent = open ? "▸" : "▾";
+    if (!built){
+      built = true;
+      const anc = new Set(ancestors); anc.add(id);
+      for (const p of pairs) kids.appendChild(treeRow(p.child, p.edge, anc));
+    }
+  };
+  return li;
+}
+
+function triPlaceholder(){
+  const t = document.createElement("span");
+  t.className = "tri leaf"; t.textContent = "•";
+  return t;
+}
+
+function nameBtn(n, isRoot){
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "tname" + (n.external ? " ext" : "");
+  b.textContent = n.id;
+  if (!isRoot) b.onclick = () => setRoot(n.id);
+  else b.onclick = () => select(n.id);
+  return b;
+}
+
+function badges(n, edge, cycle){
+  const out = [];
+  if (edge){
+    const b = document.createElement("span");
+    b.className = "tbadge";
+    b.textContent = edge.alias ? `${edge.kind} {{${edge.alias}}}` : edge.kind;
+    out.push(b);
+  }
+  if (n && n.flags && n.flags.length){
+    const f = document.createElement("span");
+    f.className = "tflag"; f.textContent = "⚠ " + n.flags.join(",");
+    out.push(f);
+  }
+  if (cycle){
+    const c = document.createElement("span");
+    c.className = "tcycle"; c.textContent = "↻ cycle";
+    out.push(c);
+  }
+  return out;
+}
+
+function renderLanding(){
+  const hint = document.createElement("p");
+  hint.className = "hint";
+  hint.textContent = "Pick a skill to see what it imports — or search above. Click a name to walk into its dependencies.";
+  explorerEl.appendChild(hint);
+
+  const wrap = document.createElement("div");
+  wrap.className = "landing";
+  const q = state.query;
+  for (const layer of LAYERS){
+    const items = GRAPH.nodes
+      .filter(n => n.layer === layer && (n.kind === "skill" || n.kind === "target"))
+      .filter(n => !q || n.id.toLowerCase().includes(q))
+      .sort((a,b) => a.id.localeCompare(b.id));
+    if (!items.length) continue;
+    const g = document.createElement("div");
+    g.className = "lgroup";
+    const h = document.createElement("h4");
+    h.textContent = LAYER_LABEL[layer];
+    g.appendChild(h);
+    for (const n of items){
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "litem";
+      b.append(dot(n.layer, n.external), document.createTextNode(n.id));
+      b.onclick = () => setRoot(n.id);
+      g.appendChild(b);
+    }
+    wrap.appendChild(g);
+  }
+  if (!wrap.children.length){
+    const none = document.createElement("p");
+    none.className = "hint"; none.textContent = "no skill matches your search";
+    explorerEl.appendChild(none);
+  } else {
+    explorerEl.appendChild(wrap);
+  }
+}
+
+renderExplorer();
 </script>
 </body>
 </html>
