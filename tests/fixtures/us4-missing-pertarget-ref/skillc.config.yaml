@@ -1,8 +1,0 @@
-targets:
-  admin:
-    entry:
-      mounts: [r]
-  shop:
-    entry:
-      mounts: []
-agents: [claude]

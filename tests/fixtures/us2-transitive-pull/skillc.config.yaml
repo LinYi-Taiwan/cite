@@ -1,6 +1,0 @@
-targets:
-  web:
-    entry:
-      mounts: [main]
-agents: [claude]
-sharedReferences: [fields]

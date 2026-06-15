@@ -1,1 +1,0 @@
-SCM-specific frontend reference.

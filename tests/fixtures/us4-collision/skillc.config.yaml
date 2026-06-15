@@ -1,7 +1,0 @@
-targets:
-  admin:
-    entry:
-      mounts: [c]
-agents: [claude]
-# `admin` is also a registered target name → collision (Edge Cases).
-sharedReferences: [admin]

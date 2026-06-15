@@ -29,26 +29,3 @@ jobs:
 
       - name: Test
         run: cargo test --workspace --locked
-
-  determinism:
-    # FR-022 / SC-007 + contracts/cli.md: the *artifact* (not the compiler binary) must be
-    # byte-identical for identical (catalog, config, target, agent). This job asserts exactly
-    # that — build the same fixture twice with --locked --frozen and diff the output trees.
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-
-      - name: Build release binary
-        run: cargo build --release --bin skillc --locked
-
-      - name: Build the same fixture twice (locked + frozen)
-        run: |
-          BIN=target/release/skillc
-          FIX=tests/fixtures/us1-reuse
-          "$BIN" build --target admin --agent claude --catalog "$FIX" --out dist_a --locked --frozen
-          "$BIN" build --target admin --agent claude --catalog "$FIX" --out dist_b --locked --frozen
-
-      - name: Diff the two artifacts (fail on any byte difference)
-        run: diff -r dist_a dist_b && echo "BYTE-IDENTICAL"

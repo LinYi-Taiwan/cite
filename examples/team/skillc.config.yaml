@@ -1,9 +1,0 @@
-# 兩個專案（target）：web 前端、api 後端。各自掛自己要的 skill。
-targets:
-  web:
-    entry:
-      mounts: [frontend-coding]
-  api:
-    entry:
-      mounts: [backend-coding]
-agents: [claude]

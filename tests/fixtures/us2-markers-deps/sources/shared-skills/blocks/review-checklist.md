@@ -1,2 +1,0 @@
-- Check naming.
-- Check tests.

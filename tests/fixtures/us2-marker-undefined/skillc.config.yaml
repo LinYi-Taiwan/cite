@@ -1,5 +1,0 @@
-targets:
-  admin:
-    entry:
-      mounts: [bad]
-agents: [claude]

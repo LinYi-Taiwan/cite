@@ -7,12 +7,10 @@ license.workspace = true
 description = "Consumption-side inspector + control panel for installed AI-agent skills: unified inventory, overlap clusters, safe reversible actions, activation/context transparency."
 
 [[bin]]
-name = "skill-inspector"
+name = "cite"
 path = "src/main.rs"
 
 [dependencies]
-# Reuse the compiler workspace's frontmatter parser + graph/asset shapes.
-skillc-core = { path = "../skillc-core" }
 # Already in [workspace.dependencies]; no new network-fetched crates.
 serde.workspace = true
 serde_json.workspace = true

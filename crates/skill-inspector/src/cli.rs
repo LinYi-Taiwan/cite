@@ -7,7 +7,7 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 
 #[derive(Parser, Debug)]
 #[command(
-    name = "skill-inspector",
+    name = "cite",
     about = "Inspect, de-duplicate, and safely manage installed AI-agent skills."
 )]
 pub struct Cli {

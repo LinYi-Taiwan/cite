@@ -203,12 +203,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9f1f227452a390804cdb637b74a86990f2a7d7ba4b7d5693aac9b4dd6defd8d6"
 
 [[package]]
-name = "fixedbitset"
-version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ce7134b9999ecaf8bcd65542e436736ef32ddca1b3e06094cb6ec5755203b80"
-
-[[package]]
 name = "foldhash"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -343,16 +337,6 @@ name = "once_cell_polyfill"
 version = "1.70.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
-
-[[package]]
-name = "petgraph"
-version = "0.6.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b4c5cc86750666a3ed20bdaf5ca2a0344f9c67674cae0515bec2da16fbaa47db"
-dependencies = [
- "fixedbitset",
- "indexmap",
-]
 
 [[package]]
 name = "prettyplease"
@@ -521,28 +505,6 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "insta",
- "serde",
- "serde_json",
- "serde_norway",
- "sha2",
- "skillc-core",
-]
-
-[[package]]
-name = "skillc"
-version = "0.1.0"
-dependencies = [
- "clap",
- "skill-inspector",
- "skillc-core",
-]
-
-[[package]]
-name = "skillc-core"
-version = "0.1.0"
-dependencies = [
- "insta",
- "petgraph",
  "serde",
  "serde_json",
  "serde_norway",

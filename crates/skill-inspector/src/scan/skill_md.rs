@@ -1,13 +1,14 @@
 //! Shared skill walker + frontmatter parse (contracts/source-provider.md §Walker).
 //!
 //! For a readable root: find immediate child dirs containing `SKILL.md`, parse
-//! `name`/`description` by reusing `skillc-core`'s frontmatter parser, compute a content
-//! hash, and flag `metadata_complete=false` (never drop) on parse failure (FR-003).
+//! `name`/`description` via the local `frontmatter` parser, compute a content hash, and flag
+//! `metadata_complete=false` (never drop) on parse failure (FR-003).
 
 use std::path::{Path, PathBuf};
 
 use sha2::{Digest, Sha256};
-use skillc_core::parse::frontmatter;
+
+use crate::scan::frontmatter;
 
 /// One skill discovered under a root (pre-`Skill`: source/state/labels added by `scan`).
 pub struct WalkedSkill {

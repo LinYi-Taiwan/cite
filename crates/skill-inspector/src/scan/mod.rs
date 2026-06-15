@@ -3,6 +3,7 @@
 //! + labels) and the target folder's `skillOverrides` to set `state`. Pure-read: never mutates.
 
 pub mod claude;
+pub mod frontmatter;
 pub mod other_agent;
 pub mod skill_md;
 pub mod source;
@@ -129,7 +130,7 @@ pub fn scan(
 fn read_meta(dir: &std::path::Path) -> (Option<String>, Option<String>, bool) {
     let skill_md = dir.join("SKILL.md");
     match std::fs::read_to_string(&skill_md) {
-        Ok(text) => match skillc_core::parse::frontmatter::parse(&text, &skill_md) {
+        Ok(text) => match frontmatter::parse(&text, &skill_md) {
             Ok(parsed) => {
                 let name = parsed.frontmatter.name.clone();
                 let description = parsed.frontmatter.description.clone();
