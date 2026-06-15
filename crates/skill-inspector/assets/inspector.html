@@ -16,14 +16,21 @@
   header h1 { font-size:15px; margin:0; font-weight:600; }
   #search { border:1px solid #ccc; border-radius:6px; padding:5px 10px; font-size:13px; width:280px; }
   .meta { color:var(--muted); font-size:12px; }
-  main { display:grid; grid-template-columns: 1fr 360px; gap:16px; padding:16px; align-items:start; }
+  main { max-width:1280px; margin:0 auto; padding:16px; }
+  /* inventory: two scopes side by side — global (left) | project (right) */
+  #inventory { display:grid; grid-template-columns:1fr 1fr; gap:16px; align-items:start; }
+  /* clusters + context: full-width row below the two columns */
+  #aux { margin-top:16px; display:grid; grid-template-columns:1fr 1fr; gap:16px; align-items:start; }
+  @media (max-width:860px) {
+    #inventory, #aux { grid-template-columns:1fr; }
+  }
   section { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px 14px; }
   section h2 { font-size:13px; margin:0 0 8px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); }
   .skill { border:1px solid var(--line); border-radius:6px; padding:10px 12px; margin-bottom:8px; }
   .skill .row1 { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
   .skill .name { font-weight:600; }
   .skill .desc { color:var(--ink); margin:4px 0; }
-  .skill .loc { color:var(--muted); font-size:11px; word-break:break-all; }
+  .skill .loc { color:var(--muted); font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .badge { font-size:11px; padding:1px 7px; border-radius:10px; color:#fff; }
   .b-active { background:var(--active); } .b-folder { background:var(--folder); } .b-global { background:var(--global); }
   .b-src { background:#888; } .b-incomplete { background:#b08968; } .b-agent { background:#333; }
@@ -48,11 +55,16 @@
   .warnmsg { color:var(--warn); font-size:11px; margin-top:4px; }
   code { background:#f0f0ec; border-radius:3px; padding:0 3px; }
 
+  /* sub-group heading inside the global column */
+  .subhead { display:flex; align-items:baseline; gap:8px; margin:14px 0 8px; }
+  .subhead:first-child { margin-top:0; }
+  .subhead h3 { font-size:12px; margin:0; font-weight:600; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); }
+  .subhead .sub-note { font-size:11px; color:var(--muted); }
+
   /* simplified card: clickable name + path + a single toggle */
   .skill .head { display:flex; align-items:center; gap:10px; }
   .skill .name { cursor:pointer; }
   .skill .name:hover { text-decoration:underline; }
-  .skill .name .caret { color:var(--muted); font-size:10px; margin-right:4px; }
   .skill .spacer { flex:1; }
   .switch { position:relative; display:inline-block; width:40px; height:22px; flex:0 0 auto; }
   .switch input { opacity:0; width:0; height:0; }
@@ -61,8 +73,17 @@
   .switch input:checked + .slider { background:var(--active); }
   .switch input:checked + .slider:before { transform:translateX(18px); }
   .switch input:disabled + .slider { opacity:.45; cursor:not-allowed; }
-  .detail { margin-top:10px; border-top:1px solid var(--line); padding-top:10px; display:none; }
-  .detail.open { display:block; }
+
+  /* modal: click a skill name → read its SKILL.md here */
+  .modal-backdrop { position:fixed; inset:0; background:rgba(0,0,0,.4); display:none; align-items:flex-start; justify-content:center; padding:5vh 16px; z-index:50; }
+  .modal-backdrop.open { display:flex; }
+  .modal { background:var(--panel); border-radius:10px; width:100%; max-width:720px; max-height:80vh; display:flex; flex-direction:column; box-shadow:0 12px 40px rgba(0,0,0,.25); }
+  .modal-head { display:flex; align-items:baseline; gap:10px; padding:14px 16px 10px; border-bottom:1px solid var(--line); }
+  .modal-head .m-name { font-weight:600; font-size:15px; }
+  .modal-head .m-path { color:var(--muted); font-size:11px; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .modal-head .m-close { font-size:20px; line-height:1; padding:0 6px; border:none; background:none; color:var(--muted); cursor:pointer; }
+  .modal-head .m-close:hover { color:var(--ink); background:none; }
+  .modal-body { padding:14px 16px; overflow:auto; }
   .md h1,.md h2,.md h3 { margin:.6em 0 .3em; line-height:1.25; }
   .md h1 { font-size:18px; } .md h2 { font-size:16px; } .md h3 { font-size:14px; }
   .md p { margin:.5em 0; } .md ul,.md ol { margin:.4em 0; padding-left:20px; }
@@ -81,18 +102,29 @@
 </header>
 <main>
   <div id="inventory"></div>
-  <aside>
+  <div id="aux">
     <section id="clusters-sec">
       <h2>Overlap clusters</h2>
       <div class="advisory">Advisory suggestions — nothing is changed without an explicit action.</div>
       <div id="clusters"></div>
     </section>
-    <section id="context-sec" style="margin-top:16px;">
+    <section id="context-sec">
       <h2>Activation &amp; context</h2>
       <div id="context"></div>
     </section>
-  </aside>
+  </div>
 </main>
+
+<div class="modal-backdrop" id="modal" role="dialog" aria-modal="true" aria-labelledby="modal-name">
+  <div class="modal">
+    <div class="modal-head">
+      <span class="m-name" id="modal-name"></span>
+      <span class="m-path" id="modal-path"></span>
+      <button class="m-close" id="modal-close" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+  </div>
+</div>
 
 <script>
 "use strict";
@@ -121,7 +153,8 @@ const KIND_META = {
   plugin:        { title: "Plugin skills", note: "disabled per-repo via a permissions.deny rule" },
   "other-agent": { title: "Other agents", note: "no per-repo toggle for this source" },
 };
-const KIND_ORDER = ["project", "user", "plugin", "other-agent"];
+// Left "Global" column, in sub-heading order. "project" lives in its own right-hand column.
+const GLOBAL_KINDS = ["user", "plugin", "other-agent"];
 
 function sourceKindMap() {
   const m = {};
@@ -147,31 +180,46 @@ function render() {
   document.getElementById("summary").textContent =
     `${skills.length} skills · ${(EXPORT.sources||[]).length} sources`;
 
-  // Group by source kind; render one section per non-empty group in a stable order.
+  // Group by source kind, then split into two scopes: global (everything not project-local)
+  // on the left, the current project's skills on the right — so the two are easy to tell apart.
   const groups = {};
   filtered.forEach(s => { const k = kindOf(s, kinds); (groups[k] = groups[k] || []).push(s); });
 
-  let html = "";
-  KIND_ORDER.forEach(kind => {
+  // Left column: personal + plugin + other-agent, each under its own sub-heading.
+  let globalHtml = "";
+  GLOBAL_KINDS.forEach(kind => {
     const list = groups[kind];
     if (!list || !list.length) return;
     const meta = KIND_META[kind] || { title: kind, note: "" };
-    html += `<section><div class="sec-head"><h2>${esc(meta.title)}</h2>`
-          + `<span class="sec-note">${esc(meta.note)}</span></div>`
-          + list.map(s => card(s, kind)).join("")
-          + `</section>`;
+    globalHtml += `<div class="subhead"><h3>${esc(meta.title)}</h3>`
+                + `<span class="sub-note">${esc(meta.note)}</span></div>`
+                + list.map(s => card(s, kind)).join("");
   });
-  document.getElementById("inventory").innerHTML = html || "<section><div class='empty'>No skills match.</div></section>";
+  const globalSec = `<section><div class="sec-head"><h2>Global</h2>`
+    + `<span class="sec-note">installed on this machine — toggling affects THIS repo only</span></div>`
+    + (globalHtml || `<div class="empty">No global skills match.</div>`) + `</section>`;
+
+  // Right column: this project's skills.
+  const projList = groups["project"] || [];
+  const projMeta = KIND_META["project"];
+  const projSec = `<section><div class="sec-head"><h2>Project</h2>`
+    + `<span class="sec-note">${esc(projMeta.note)}</span></div>`
+    + (projList.length ? projList.map(s => card(s, "project")).join("") : `<div class="empty">No project skills match.</div>`)
+    + `</section>`;
+
+  document.getElementById("inventory").innerHTML = globalSec + projSec;
 
   renderClusters();
   renderContext();
 }
 
-// One card: clickable name (expands the SKILL.md), the on-disk path, and a single on/off toggle.
-// The toggle is "on" when active; off disables it per-repo, on re-enables. Sources with no
-// per-repo mechanism render a disabled toggle. Keys ride in HTML-escaped data-* attributes.
+// One card: clickable name (opens the SKILL.md in a modal), the on-disk path, and a single on/off
+// toggle. The toggle is "on" when active; off disables it per-repo, on re-enables. Sources with no
+// per-repo mechanism render a disabled toggle. Keys/name/path ride in HTML-escaped data-* attributes.
 function card(s, kind) {
   const k = esc(`${s.agent}/${s.source_id}/${s.id}`);
+  const nm = esc(s.name || s.id);
+  const path = esc(s.path);
   const on = s.state === "active";
   const toggleable = canTogglePerRepo(kind) && !window.__EXPORT__;
   const title = !canTogglePerRepo(kind) ? "no per-repo toggle for this source"
@@ -181,16 +229,15 @@ function card(s, kind) {
     : "";
   return `<div class="skill" data-key="${k}">
     <div class="head">
-      <span class="name" data-act="open" data-key="${k}"><span class="caret">▶</span>${esc(s.name || s.id)}</span>
+      <span class="name" data-act="open" data-key="${k}" data-name="${nm}" data-path="${path}" title="Open SKILL.md">${nm}</span>
       <span class="spacer"></span>
       <label class="switch" title="${esc(title)}">
-        <input type="checkbox" data-act="toggle" data-key="${k}" aria-label="Toggle ${esc(s.name || s.id)}" ${on ? "checked" : ""} ${toggleable ? "" : "disabled"}>
+        <input type="checkbox" data-act="toggle" data-key="${k}" aria-label="Toggle ${nm}" ${on ? "checked" : ""} ${toggleable ? "" : "disabled"}>
         <span class="slider"></span>
       </label>
     </div>
-    <div class="loc">${esc(s.path)}</div>
+    <div class="loc" title="${path}">${path}</div>
     ${pluginNote}
-    <div class="detail" data-detail="${k}"></div>
   </div>`;
 }
 
@@ -243,27 +290,34 @@ async function act(action, key) {
   await reload();
 }
 
-// Expand a card to show its SKILL.md, rendered as readable markdown.
-async function openDetail(key, card) {
-  const box = card.querySelector(".detail");
-  const caret = card.querySelector(".caret");
-  if (box.classList.contains("open")) { box.classList.remove("open"); if (caret) caret.textContent = "▶"; return; }
-  if (caret) caret.textContent = "▼";
-  if (!box.dataset.loaded) {
-    if (window.__EXPORT__) {
-      box.innerHTML = '<div class="empty">Static snapshot — run <code>cite inspect serve</code> to read SKILL.md.</div>';
-    } else {
-      box.innerHTML = '<div class="empty">loading…</div>';
-      try {
-        const res = await fetch("/api/skill?key=" + encodeURIComponent(key));
-        if (!res.ok) throw new Error("not ok");
-        const md = stripFrontmatter(await res.text());
-        box.innerHTML = '<div class="md">' + mdToHtml(md) + '</div>';
-        box.dataset.loaded = "1";
-      } catch { box.innerHTML = '<div class="empty">Could not load SKILL.md.</div>'; }
-    }
+// Open a modal showing the skill's SKILL.md, rendered as readable markdown.
+let modalReturnFocus = null;
+async function openModal(key, name, path, trigger) {
+  modalReturnFocus = trigger || null;
+  const modal = document.getElementById("modal");
+  const body = document.getElementById("modal-body");
+  document.getElementById("modal-name").textContent = name || "";
+  const pathEl = document.getElementById("modal-path");
+  pathEl.textContent = path || "";
+  pathEl.title = path || "";
+  modal.classList.add("open");
+  document.getElementById("modal-close").focus();
+  if (window.__EXPORT__) {
+    body.innerHTML = '<div class="empty">Static snapshot — run <code>cite inspect serve</code> to read SKILL.md.</div>';
+    return;
   }
-  box.classList.add("open");
+  body.innerHTML = '<div class="empty">loading…</div>';
+  try {
+    const res = await fetch("/api/skill?key=" + encodeURIComponent(key));
+    if (!res.ok) throw new Error("not ok");
+    const md = stripFrontmatter(await res.text());
+    body.innerHTML = '<div class="md">' + mdToHtml(md) + '</div>';
+  } catch { body.innerHTML = '<div class="empty">Could not load SKILL.md.</div>'; }
+}
+
+function closeModal() {
+  document.getElementById("modal").classList.remove("open");
+  if (modalReturnFocus) { modalReturnFocus.focus(); modalReturnFocus = null; }
 }
 
 // Drop the leading `---`-fenced YAML frontmatter (name/description already shown on the card).
@@ -324,11 +378,17 @@ async function reload() {
 document.getElementById("search").addEventListener("input", render);
 
 const skillsEl = document.getElementById("inventory");
-// Click a name → expand/collapse its SKILL.md.
+// Click a name → open its SKILL.md in a modal.
 skillsEl.addEventListener("click", (e) => {
   const nameEl = e.target.closest('[data-act="open"]');
   if (!nameEl) return;
-  openDetail(nameEl.getAttribute("data-key"), nameEl.closest(".skill"));
+  openModal(nameEl.getAttribute("data-key"), nameEl.getAttribute("data-name"), nameEl.getAttribute("data-path"), nameEl);
+});
+// Modal close: × button, backdrop click, Escape.
+document.getElementById("modal-close").addEventListener("click", closeModal);
+document.getElementById("modal").addEventListener("click", (e) => { if (e.target.id === "modal") closeModal(); });
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && document.getElementById("modal").classList.contains("open")) closeModal();
 });
 // Flip a toggle → enable/disable. Re-render afterwards so the switch reflects the real state
 // (it snaps back if the action was cancelled or failed).
