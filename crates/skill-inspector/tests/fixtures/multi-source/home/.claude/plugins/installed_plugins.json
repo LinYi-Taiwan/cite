@@ -1,0 +1,8 @@
+{
+  "version": 2,
+  "plugins": {
+    "devkit-typescript@devkit": [
+      { "scope": "user", "installPath": "cache/devkit/devkit-typescript/1.0", "version": "1.0" }
+    ]
+  }
+}

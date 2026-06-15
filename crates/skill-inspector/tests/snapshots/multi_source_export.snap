@@ -1,0 +1,245 @@
+---
+source: crates/skill-inspector/tests/scan_inventory.rs
+expression: export
+---
+{
+  "version": 1,
+  "generated_for": {
+    "agents": [
+      "claude-code"
+    ],
+    "project": "<FIX>/project"
+  },
+  "sources": [
+    {
+      "id": "claude:plugin:devkit-typescript",
+      "agent": "claude-code",
+      "kind": "plugin",
+      "root": "<FIX>/home/.claude/plugins/cache/devkit/devkit-typescript/1.0/skills",
+      "availability": "readable"
+    },
+    {
+      "id": "claude:project",
+      "agent": "claude-code",
+      "kind": "project",
+      "root": "<FIX>/project/.claude/skills",
+      "availability": "readable"
+    },
+    {
+      "id": "claude:user",
+      "agent": "claude-code",
+      "kind": "user",
+      "root": "<FIX>/home/.claude/skills",
+      "availability": "readable"
+    }
+  ],
+  "skills": [
+    {
+      "id": "devkit.typescript.code-review",
+      "name": "TypeScript Code Review",
+      "description": "Review a TypeScript diff for type bugs and code review cleanups.",
+      "source_id": "claude:plugin:devkit-typescript",
+      "agent": "claude-code",
+      "path": "<FIX>/home/.claude/plugins/cache/devkit/devkit-typescript/1.0/skills/devkit.typescript.code-review",
+      "content_hash": "sha256:7aeb1d4b04d0268d5e257fc257b32f765ff4502a2f89ea5a7d4607d640ce06d2",
+      "state": "active",
+      "metadata_complete": true,
+      "labels": []
+    },
+    {
+      "id": "qa-playwright",
+      "name": "QA Playwright",
+      "description": "Write and run Playwright E2E browser tests for a feature flow.",
+      "source_id": "claude:project",
+      "agent": "claude-code",
+      "path": "<FIX>/project/.claude/skills/qa-playwright",
+      "content_hash": "sha256:3908a145b8b5f877426f52a747c3ab438e5e3a4bb15d13de35a1b99d3cdf8b1b",
+      "state": "active",
+      "metadata_complete": true,
+      "labels": []
+    },
+    {
+      "id": "broken",
+      "source_id": "claude:user",
+      "agent": "claude-code",
+      "path": "<FIX>/home/.claude/skills/broken",
+      "content_hash": "sha256:44356c3090eb57b35773c6a83e1f997aa85db5d4c25b6a99e47fd458addd1d71",
+      "state": "active",
+      "metadata_complete": false,
+      "labels": []
+    },
+    {
+      "id": "code-review",
+      "name": "Code Review",
+      "description": "Review a diff for correctness bugs and reuse/simplification/efficiency cleanups.",
+      "source_id": "claude:user",
+      "agent": "claude-code",
+      "path": "<FIX>/home/.claude/skills/code-review",
+      "content_hash": "sha256:ba16535a2df01766f898a86ef0267fbd2f60e4d1b52bd957b126bcdf31a41705",
+      "state": "active",
+      "metadata_complete": true,
+      "labels": []
+    },
+    {
+      "id": "qa-playwright",
+      "name": "QA Playwright",
+      "description": "Write and run Playwright E2E browser tests for a feature flow.",
+      "source_id": "claude:user",
+      "agent": "claude-code",
+      "path": "<FIX>/home/.claude/skills/qa-playwright",
+      "content_hash": "sha256:3908a145b8b5f877426f52a747c3ab438e5e3a4bb15d13de35a1b99d3cdf8b1b",
+      "state": "active",
+      "metadata_complete": true,
+      "labels": []
+    },
+    {
+      "id": "react-code-review",
+      "name": "React Code Review",
+      "description": "Review a React diff for component bugs, hooks misuse, and rerender cleanups.",
+      "source_id": "claude:user",
+      "agent": "claude-code",
+      "path": "<FIX>/home/.claude/skills/react-code-review",
+      "content_hash": "sha256:f656a719e839b7345e700aa0a2b0a054a8ce7f1ddb2aec546848fca7bbe6966e",
+      "state": "active",
+      "metadata_complete": true,
+      "labels": []
+    }
+  ],
+  "clusters": [
+    {
+      "id": "c-ec290b44",
+      "kind": "duplicate-identity",
+      "members": [
+        "claude-code/claude:project/qa-playwright",
+        "claude-code/claude:user/qa-playwright"
+      ],
+      "reason": "identical content hash"
+    },
+    {
+      "id": "c-fddcce10",
+      "kind": "similarity",
+      "members": [
+        "claude-code/claude:plugin:devkit-typescript/devkit.typescript.code-review",
+        "claude-code/claude:user/code-review",
+        "claude-code/claude:user/react-code-review"
+      ],
+      "reason": "shared terms: review, code, bugs, cleanups",
+      "score": 0.39
+    }
+  ],
+  "clusters_empty_reason": null,
+  "activation": [
+    {
+      "skill_key": "claude-code/claude:plugin:devkit-typescript/devkit.typescript.code-review",
+      "context": "<FIX>/project",
+      "eligible": true,
+      "active": true
+    },
+    {
+      "skill_key": "claude-code/claude:project/qa-playwright",
+      "context": "<FIX>/project",
+      "eligible": true,
+      "active": true
+    },
+    {
+      "skill_key": "claude-code/claude:user/broken",
+      "context": "<FIX>/project",
+      "eligible": true,
+      "active": true
+    },
+    {
+      "skill_key": "claude-code/claude:user/code-review",
+      "context": "<FIX>/project",
+      "eligible": true,
+      "active": true
+    },
+    {
+      "skill_key": "claude-code/claude:user/qa-playwright",
+      "context": "<FIX>/project",
+      "eligible": true,
+      "active": true
+    },
+    {
+      "skill_key": "claude-code/claude:user/react-code-review",
+      "context": "<FIX>/project",
+      "eligible": true,
+      "active": true
+    }
+  ],
+  "context_loads": [
+    {
+      "turn_ref": "claude-code:unavailable",
+      "availability": "unavailable",
+      "loaded_skill_keys": []
+    }
+  ],
+  "nodes": [
+    {
+      "id": "claude-code/claude:plugin:devkit-typescript/devkit.typescript.code-review",
+      "kind": "skill",
+      "layer": "claude:plugin:devkit-typescript",
+      "external": true,
+      "description": "Review a TypeScript diff for type bugs and code review cleanups.",
+      "source": "claude:plugin:devkit-typescript",
+      "flags": []
+    },
+    {
+      "id": "claude-code/claude:project/qa-playwright",
+      "kind": "skill",
+      "layer": "claude:project",
+      "description": "Write and run Playwright E2E browser tests for a feature flow.",
+      "source": "claude:project",
+      "flags": []
+    },
+    {
+      "id": "claude-code/claude:user/broken",
+      "kind": "skill",
+      "layer": "claude:user",
+      "source": "claude:user",
+      "flags": [
+        "incomplete"
+      ]
+    },
+    {
+      "id": "claude-code/claude:user/code-review",
+      "kind": "skill",
+      "layer": "claude:user",
+      "description": "Review a diff for correctness bugs and reuse/simplification/efficiency cleanups.",
+      "source": "claude:user",
+      "flags": []
+    },
+    {
+      "id": "claude-code/claude:user/qa-playwright",
+      "kind": "skill",
+      "layer": "claude:user",
+      "description": "Write and run Playwright E2E browser tests for a feature flow.",
+      "source": "claude:user",
+      "flags": []
+    },
+    {
+      "id": "claude-code/claude:user/react-code-review",
+      "kind": "skill",
+      "layer": "claude:user",
+      "description": "Review a React diff for component bugs, hooks misuse, and rerender cleanups.",
+      "source": "claude:user",
+      "flags": []
+    }
+  ],
+  "edges": [
+    {
+      "from": "claude-code/claude:plugin:devkit-typescript/devkit.typescript.code-review",
+      "to": "claude-code/claude:user/code-review",
+      "kind": "overlap"
+    },
+    {
+      "from": "claude-code/claude:plugin:devkit-typescript/devkit.typescript.code-review",
+      "to": "claude-code/claude:user/react-code-review",
+      "kind": "overlap"
+    },
+    {
+      "from": "claude-code/claude:project/qa-playwright",
+      "to": "claude-code/claude:user/qa-playwright",
+      "kind": "duplicate"
+    }
+  ]
+}

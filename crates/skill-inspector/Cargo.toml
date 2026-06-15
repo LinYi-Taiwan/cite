@@ -1,0 +1,41 @@
+[package]
+name = "skill-inspector"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "Consumption-side inspector + control panel for installed AI-agent skills: unified inventory, overlap clusters, safe reversible actions, activation/context transparency."
+
+[[bin]]
+name = "skill-inspector"
+path = "src/main.rs"
+
+[dependencies]
+# Reuse the compiler workspace's frontmatter parser + graph/asset shapes.
+skillc-core = { path = "../skillc-core" }
+# Already in [workspace.dependencies]; no new network-fetched crates.
+serde.workspace = true
+serde_json.workspace = true
+serde_norway.workspace = true
+sha2.workspace = true
+clap.workspace = true
+
+# The skill walker (one level of read_dir) and the loopback HTTP server are built on
+# std alone — no `walkdir` / `tiny_http`. This keeps the crate to already-vendored deps,
+# stays fully offline, and matches the plan's lean/YAGNI gate (plan.md Structure Decision).
+
+[dev-dependencies]
+# `filters` enables Settings::add_filter (path redaction for deterministic snapshots).
+insta = { workspace = true, features = ["filters"] }
+
+[[test]]
+name = "scan_inventory"
+path = "tests/scan_inventory.rs"
+
+[[test]]
+name = "overlap_clusters"
+path = "tests/overlap_clusters.rs"
+
+[[test]]
+name = "action_roundtrip"
+path = "tests/action_roundtrip.rs"

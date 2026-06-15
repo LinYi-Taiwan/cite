@@ -1,0 +1,26 @@
+---
+source: crates/skill-inspector/tests/overlap_clusters.rs
+expression: export.clusters
+---
+[
+  {
+    "id": "c-ec290b44",
+    "kind": "duplicate-identity",
+    "members": [
+      "claude-code/claude:project/qa-playwright",
+      "claude-code/claude:user/qa-playwright"
+    ],
+    "reason": "identical content hash"
+  },
+  {
+    "id": "c-fddcce10",
+    "kind": "similarity",
+    "members": [
+      "claude-code/claude:plugin:devkit-typescript/devkit.typescript.code-review",
+      "claude-code/claude:user/code-review",
+      "claude-code/claude:user/react-code-review"
+    ],
+    "reason": "shared terms: review, code, bugs, cleanups",
+    "score": 0.39
+  }
+]

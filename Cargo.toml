@@ -2,7 +2,7 @@
 # A thin `skillc` binary (CLI) over a `skillc-core` library holding the whole pipeline.
 [workspace]
 resolver = "2"
-members = ["crates/skillc", "crates/skillc-core"]
+members = ["crates/skillc", "crates/skillc-core", "crates/skill-inspector"]
 
 [workspace.package]
 edition = "2021"

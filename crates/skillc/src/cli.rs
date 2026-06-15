@@ -36,6 +36,16 @@ enum Command {
     Graph(GraphArgs),
     /// Place a previously-built artifact into an agent destination.
     Install(InstallArgs),
+    /// Inspect the skills installed on THIS machine (consumption side): build a unified
+    /// inventory + overlap clusters (`scan`), or open the interactive control panel (`serve`).
+    Inspect(InspectArgs),
+}
+
+/// `cite inspect <scan|serve>` — delegates to the `skill-inspector` crate.
+#[derive(Debug, Args)]
+struct InspectArgs {
+    #[command(subcommand)]
+    command: skill_inspector::cli::Command,
 }
 
 #[derive(Debug, Args)]
@@ -162,6 +172,7 @@ pub fn run() -> i32 {
         Command::Why(args) => run_why_cmd(args),
         Command::Graph(args) => run_graph_cmd(args),
         Command::Install(args) => run_install_cmd(args),
+        Command::Inspect(args) => skill_inspector::run(args.command),
     }
 }
 

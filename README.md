@@ -253,3 +253,45 @@ and `diff -r`s the outputs, failing on any byte difference.
 - Cross-repo sources are **pre-cloned**: the lockfile pins each source to a local mirror
   `path`. Network fetch via `gix` is a documented future extension (see
   `resolve/source.rs`) — keeping CI hermetic and builds deterministic.
+
+---
+
+## `skill-inspector` — the consumption-side companion
+
+Where `skillc` is the **author's** compiler, `skill-inspector`
+(`crates/skill-inspector`) is the **user's** inspector + control panel for the skills
+already installed on a machine. It reuses two seeds from `skillc-core` — the `SKILL.md`
+frontmatter parser and the `graph.html` visualization — and otherwise owns its own scan /
+overlap / action logic.
+
+```bash
+# Pure-read: build one unified inventory + overlap clusters across all sources.
+skill-inspector scan --agent claude-code --project . --format json
+skill-inspector scan --format html --out inventory.html   # self-contained snapshot
+
+# Interactive: local control-panel UI + action API on loopback only.
+skill-inspector serve --project .
+```
+
+- **Unified inventory** — every installed skill across the user, project, and plugin
+  roots (and additional agents), each with name, description, source, location, and
+  enabled/disabled state. Malformed metadata is flagged (`metadata_complete:false`),
+  never dropped.
+- **Overlap clusters** — deterministic, offline, lexical (token-set Jaccard + TF-IDF
+  cosine) similarity plus duplicate-by-identity (shared content hash / id across roots).
+  Advisory only — clustering never mutates anything.
+- **Safe actions** (via `serve`, on explicit request only — the **only** disk writers):
+  - *Disable (this folder)* — Tier-1, writes `skillOverrides["<id>"]="off"` into the
+    folder's `.claude/settings.local.json`, preserving other keys. Turns a global skill
+    off for **one folder only**; the skill's files are never touched.
+  - *Disable (global)* — Tier-2 fallback for sources with no per-folder toggle (plugin
+    skills): a reversible quarantine-move, honestly surfaced as global.
+  - *Enable* — reverses either, losslessly (byte-identical restore).
+  - *Remove* — requires explicit confirmation; backs up before deleting.
+- **Activation & context** — eligible/active computed from disk; an agent's recorded
+  runtime loads are surfaced where available and explicitly marked `unavailable` (never
+  fabricated) where not.
+
+**Safe-by-default is structural**: `scan` / `overlap` / `activation` / `context` are
+pure-read; only `action/` (reached through `serve`) writes. A `scan` of a real machine
+of O(10²) skills completes in a couple of seconds and changes nothing on disk.
