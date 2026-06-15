@@ -200,8 +200,7 @@ pub fn remove_skill_deny(folder: &Path, name: &str) -> std::io::Result<bool> {
     if arr.len() == before {
         return Ok(false); // wasn't present → no change, skip the write
     }
-    write_root(folder, &root)
-        .map(|()| true)
+    write_root(folder, &root).map(|()| true)
 }
 
 fn write_root(folder: &Path, root: &serde_json::Value) -> std::io::Result<()> {

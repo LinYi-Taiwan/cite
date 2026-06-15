@@ -1,0 +1,73 @@
+name: Release
+
+# Tag-triggered: push `v0.1.0` → create a GitHub Release → cross-compile and
+# upload binaries for each target. The release must exist before assets upload,
+# so `create-release` runs once and the `upload` matrix depends on it.
+on:
+  push:
+    tags:
+      - v[0-9]+.*
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  create-release:
+    runs-on: ubuntu-24.04
+    # Creating a Release needs write; the rest of CI stays read-only.
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      # The npm wrapper downloads the Release asset for `v${package.json version}`,
+      # so a tag whose version doesn't match npm/package.json would ship a package
+      # that 404s on install. Fail the release loudly instead. Prerelease tags
+      # (e.g. v0.0.1-test, used for build dry-runs) are exempt.
+      - name: Assert npm version matches release tag
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          case "$tag" in
+            *-*) echo "prerelease tag $tag — skipping npm version check"; exit 0 ;;
+          esac
+          npm_version="$(node -p "require('./npm/package.json').version")"
+          if [ "$npm_version" != "$tag" ]; then
+            echo "::error::npm/package.json version ($npm_version) != release tag ($tag)"
+            exit 1
+          fi
+
+      - uses: taiki-e/create-gh-release-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  upload:
+    needs: create-release
+    name: ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            os: macos-14
+          - target: x86_64-apple-darwin
+            os: macos-13
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      # Builds (cross/musl as needed), packages a tar.gz, uploads to the Release,
+      # and writes a sha256 checksum. The `archive:` name is the single contract
+      # shared with npm/install.js — keep them in lockstep.
+      - uses: taiki-e/upload-rust-binary-action@v1
+        with:
+          bin: cite
+          target: ${{ matrix.target }}
+          archive: cite-$tag-$target
+          tar: unix
+          checksum: sha256
+          locked: true
+          token: ${{ secrets.GITHUB_TOKEN }}

@@ -131,6 +131,50 @@ fn tier1_folder_disable_enable_roundtrips_and_preserves_other_keys() {
 }
 
 #[test]
+fn enable_clears_a_file_side_override_with_no_state_record() {
+    // Regression: the UI shows a user/project skill as off because scan read
+    // `skillOverrides[<id>]="off"` from the file, but no folder_override record exists (the entry
+    // pre-dates the tool, the state file was cleared, or it was hand-edited). Enable must clear the
+    // file override and report success — NOT fail `not_disabled` (which broke "turn all on").
+    use skill_inspector::model::SkillState;
+    let env = setup();
+    let key = "claude-code/claude:user/react-code-review";
+    let folder = env.project.to_string_lossy().to_string();
+
+    // Seed an off-override directly in the file; leave inspector-state.json absent (no record).
+    let settings = env.project.join(".claude/settings.local.json");
+    std::fs::create_dir_all(settings.parent().unwrap()).unwrap();
+    std::fs::write(
+        &settings,
+        r#"{"permissions":{"allow":["X"]},"skillOverrides":{"react-code-review":"off"}}"#,
+    )
+    .unwrap();
+    assert!(matches!(
+        env.skill_state("react-code-review"),
+        Some(SkillState::DisabledInFolder)
+    ));
+    assert!(InspectorState::load_from(&env.state_path)
+        .folder_overrides
+        .is_empty());
+
+    let resp = env.act("enable", json!({ "skill_key": key, "folder": folder }));
+    assert_eq!(resp["ok"], json!(true), "{resp}");
+    assert_eq!(resp["state"], json!("active"));
+
+    let after: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&settings).unwrap()).unwrap();
+    assert_eq!(after["permissions"]["allow"][0], json!("X"), "other keys kept");
+    assert!(
+        after["skillOverrides"].get("react-code-review").is_none(),
+        "override cleared: {after}"
+    );
+    assert!(matches!(
+        env.skill_state("react-code-review"),
+        Some(SkillState::Active)
+    ));
+}
+
+#[test]
 fn folder_disable_rejects_a_foreign_folder() {
     // A crafted `folder` pointing outside the server's project root must be refused — never
     // silently write skillOverrides into another project's settings.
@@ -236,7 +280,10 @@ fn plugin_per_repo_disable_enable_roundtrips_via_permission_deny() {
     let after: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(&settings).unwrap()).unwrap();
     let deny = after["permissions"]["deny"].as_array().unwrap();
-    assert!(deny.iter().any(|v| v == "Bash(rm *)"), "unrelated deny kept");
+    assert!(
+        deny.iter().any(|v| v == "Bash(rm *)"),
+        "unrelated deny kept"
+    );
     assert!(
         !deny.iter().any(|v| v == deny_rule),
         "skill deny rule removed: {after}"

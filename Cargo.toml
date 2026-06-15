@@ -9,7 +9,7 @@ members = ["crates/skill-inspector"]
 edition = "2021"
 rust-version = "1.83"
 license = "MIT"
-repository = "https://github.com/starlinglabs/cite"
+repository = "https://github.com/LinYi-Taiwan/cite"
 
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }

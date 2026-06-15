@@ -47,7 +47,10 @@ pub fn scan(
         } else if claude::supports_folder_scope(source_id) {
             // Only user/project skills are keyed by bare `id` in skillOverrides — gate on it so a
             // non-Claude skill sharing an `id` with an overridden one isn't shown wrongly disabled.
-            folder_overrides.get(id).map(|v| v == "off").unwrap_or(false)
+            folder_overrides
+                .get(id)
+                .map(|v| v == "off")
+                .unwrap_or(false)
         } else {
             false
         }

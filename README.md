@@ -9,6 +9,19 @@ explicit, reversible toggles into the current repo's `.claude/settings.local.jso
 Safe-by-default is **structural**, not just disciplined: `scan` / `overlap` / `activation` /
 `context` are pure-read modules; only `action/` (reached through `serve`) ever writes.
 
+## Install
+
+If you have Node (≥ 18), run it straight from npm — the install step downloads the
+prebuilt native binary for your platform from the GitHub Release:
+
+    npx @linyi-taiwan/cite scan          # one-off
+    npm i -g @linyi-taiwan/cite          # then: cite scan / cite serve
+
+No Node? Grab a prebuilt binary from the [Releases page](https://github.com/LinYi-Taiwan/cite/releases),
+extract, and run `./cite`. Prebuilt targets: macOS (arm64 + x64) and Linux (x64).
+
+From source (any platform with a Rust toolchain), see Build below.
+
 ## Build
 
     cargo build --release        # produces `target/release/cite`
