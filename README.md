@@ -11,15 +11,19 @@ Safe-by-default is **structural**, not just disciplined: `scan` / `overlap` / `a
 
 ## Install
 
-With a Rust toolchain, install the `cite` command straight from the repo — this
-compiles and drops the binary in `~/.cargo/bin` (on your `PATH`):
+`cite` installs with Cargo, Rust's package manager. If you don't have Rust yet,
+install it from [rustup.rs](https://rustup.rs) — one command, sets up `cargo` —
+then:
 
     cargo install --git https://github.com/LinYi-Taiwan/cite --locked
     cite serve
 
-No Rust? Grab a prebuilt binary from the [Releases page](https://github.com/LinYi-Taiwan/cite/releases),
-extract, and run `./cite` (move it onto your `PATH` for `cite serve`). Prebuilt
-targets: macOS (arm64 + x64) and Linux (x64).
+This compiles `cite` and drops it in `~/.cargo/bin` (already on your `PATH` after
+rustup).
+
+Prefer not to install Rust? Grab a prebuilt binary from the
+[Releases page](https://github.com/LinYi-Taiwan/cite/releases), extract, and move
+`./cite` onto your `PATH`. Prebuilt targets: macOS (arm64 + x64) and Linux (x64).
 
 To hack on it from a clone, see Build below.
 
