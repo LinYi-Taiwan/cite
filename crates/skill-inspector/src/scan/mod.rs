@@ -41,6 +41,12 @@ pub fn scan(
     // for plugin skills (which skillOverrides can't touch). Either ⇒ `DisabledInFolder`.
     let folder_overrides = settings::read_skill_overrides(&ctx.project_root);
     let folder_denies = settings::read_skill_denies(&ctx.project_root);
+    // Machine-wide: Claude only loads a plugin that is explicitly enabled. A plugin that is
+    // `false` OR absent from `enabledPlugins` is inert in EVERY project — its skills still sit on
+    // disk (so they scan) but none can trigger ⇒ `DisabledPlugin`. Global, not per-repo, and it
+    // dominates a folder override (the plugin being off is the reason). So: active iff the bare
+    // plugin name is in this enabled set.
+    let enabled_plugins = settings::read_enabled_plugin_names(&ctx.home, &ctx.project_root);
     let is_off_in_folder = |source_id: &str, id: &str| {
         if let Some(name) = claude::plugin_skill_perm_name(source_id, id) {
             folder_denies.contains(&name)
@@ -79,6 +85,13 @@ pub fn scan(
                     };
                     if is_off_in_folder(&skill.source_id, &skill.id) {
                         skill.state = SkillState::DisabledInFolder;
+                    }
+                    // Plugin-level kill wins: a plugin not in the enabled set (false or absent) is
+                    // inert everywhere regardless of any per-repo rule.
+                    if let Some(plugin) = skill.source_id.strip_prefix("claude:plugin:") {
+                        if !enabled_plugins.contains(plugin) {
+                            skill.state = SkillState::DisabledPlugin;
+                        }
                     }
                     skill.labels = state.labels.get(&skill.key()).cloned().unwrap_or_default();
                     skills.push(skill);

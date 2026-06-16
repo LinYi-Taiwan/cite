@@ -1,0 +1,5 @@
+{
+  "enabledPlugins": {
+    "devkit-typescript@devkit": true
+  }
+}

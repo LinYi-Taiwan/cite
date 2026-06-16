@@ -118,7 +118,23 @@ pub fn serve(config: ServeConfig, port: Option<u16>) -> std::io::Result<()> {
 struct Request {
     method: String,
     path: String,
+    host: String,
     body: String,
+}
+
+/// True when the `Host` header names this loopback server (port ignored). Rejecting anything else
+/// defeats DNS-rebinding and cross-origin POSTs from a browsed page: a rebound/foreign request
+/// carries `evil.com`, not `localhost`. The server already binds 127.0.0.1, so the only callers
+/// that legitimately reach it use a localhost Host.
+fn host_is_local(host: &str) -> bool {
+    let hostname = if let Some(rest) = host.strip_prefix('[') {
+        // IPv6 literal `[::1]:port` → take up to `]`.
+        rest.split(']').next().unwrap_or("")
+    } else {
+        // `host:port` → strip the port; bare `host` → unchanged.
+        host.rsplit_once(':').map(|(h, _)| h).unwrap_or(host)
+    };
+    matches!(hostname, "127.0.0.1" | "localhost" | "::1")
 }
 
 fn read_request(stream: &TcpStream) -> std::io::Result<Option<Request>> {
@@ -132,6 +148,7 @@ fn read_request(stream: &TcpStream) -> std::io::Result<Option<Request>> {
     let path = parts.next().unwrap_or("/").to_string();
 
     let mut content_length = 0usize;
+    let mut host = String::new();
     loop {
         let mut line = String::new();
         if reader.read_line(&mut line)? == 0 {
@@ -141,8 +158,11 @@ fn read_request(stream: &TcpStream) -> std::io::Result<Option<Request>> {
         if trimmed.is_empty() {
             break;
         }
-        if let Some(value) = trimmed.to_ascii_lowercase().strip_prefix("content-length:") {
+        let lower = trimmed.to_ascii_lowercase();
+        if let Some(value) = lower.strip_prefix("content-length:") {
             content_length = value.trim().parse().unwrap_or(0);
+        } else if let Some(value) = lower.strip_prefix("host:") {
+            host = value.trim().to_string();
         }
     }
 
@@ -162,6 +182,7 @@ fn read_request(stream: &TcpStream) -> std::io::Result<Option<Request>> {
     Ok(Some(Request {
         method,
         path,
+        host,
         body: String::from_utf8_lossy(&body).into_owned(),
     }))
 }
@@ -176,7 +197,13 @@ fn handle(mut stream: TcpStream, config: &ServeConfig) -> std::io::Result<()> {
         ("GET", "/") | ("GET", "/index.html") => (
             "200 OK",
             "text/html; charset=utf-8",
-            INSPECTOR_HTML.to_string(),
+            // Dev loop: when CITE_DEV_HTML points at the asset file, read it from disk on every
+            // request so editing inspector.html shows up on a browser refresh — no rebuild needed.
+            // Unset (production / installed binary) falls back to the embedded copy.
+            std::env::var("CITE_DEV_HTML")
+                .ok()
+                .and_then(|p| std::fs::read_to_string(p).ok())
+                .unwrap_or_else(|| INSPECTOR_HTML.to_string()),
         ),
         ("GET", "/api/inventory") => ("200 OK", "application/json", config.export_json()),
         ("GET", "/api/skill") => {
@@ -185,10 +212,17 @@ fn handle(mut stream: TcpStream, config: &ServeConfig) -> std::io::Result<()> {
                 None => ("404 Not Found", "text/plain", "skill not found".to_string()),
             }
         }
-        ("POST", "/api/disable" | "/api/enable" | "/api/remove" | "/api/label") => {
-            let action = path.trim_start_matches("/api/");
-            let resp = handle_action(config, action, &req.body);
-            ("200 OK", "application/json", resp.to_string())
+        ("POST", "/api/disable" | "/api/enable" | "/api/plugin" | "/api/remove" | "/api/label") => {
+            // Mutating endpoints write settings (incl. global ~/.claude/settings.json). Refuse any
+            // request whose Host isn't this loopback server — blocks DNS-rebinding / cross-origin
+            // POSTs from a page the user happens to be browsing.
+            if !host_is_local(&req.host) {
+                ("403 Forbidden", "text/plain", "forbidden: non-local host".to_string())
+            } else {
+                let action = path.trim_start_matches("/api/");
+                let resp = handle_action(config, action, &req.body);
+                ("200 OK", "application/json", resp.to_string())
+            }
         }
         _ => ("404 Not Found", "text/plain", "not found".to_string()),
     };
@@ -210,6 +244,7 @@ fn handle_action(config: &ServeConfig, action: &str, body: &str) -> Value {
     let ctx = ActionCtx {
         inventory: &inventory,
         project_root: config.project_root.clone(),
+        home: config.home.clone(),
         state_path: config.state_path.clone(),
         quarantine_dir: config.quarantine_dir.clone(),
         trash_dir: config.trash_dir.clone(),

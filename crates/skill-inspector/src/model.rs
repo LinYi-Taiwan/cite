@@ -14,6 +14,10 @@ pub enum SkillState {
     DisabledInFolder,
     /// Tier-2: directory moved to the tool quarantine.
     DisabledGlobal,
+    /// The owning plugin is switched off (`enabledPlugins["<name>@<mkt>"]=false` in a Claude
+    /// `settings.json`), so none of its skills trigger in ANY project. On disk but inert —
+    /// distinct from a per-repo disable, and not fixable by a per-repo toggle.
+    DisabledPlugin,
 }
 
 /// One installed skill instance discovered under a source root (FR-001..005, FR-019).

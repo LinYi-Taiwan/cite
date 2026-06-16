@@ -110,6 +110,26 @@ impl SourceProvider for ClaudeProvider {
     }
 }
 
+/// Resolve a bare plugin `<name>` back to the full `"<name>@<marketplace>"` key that
+/// `installed_plugins.json` (and `enabledPlugins`) use. The scanner reduces plugin source ids to
+/// the bare name, but writing the `enabledPlugins` switch needs the exact key Claude keys on.
+/// Returns the first key (deterministic: keys sorted) whose pre-`@` segment matches — picking the
+/// SAME winner as `discover_plugins` on a name collision across marketplaces: `serde_json` has no
+/// `preserve_order`, so its `Map` is a sorted `BTreeMap` and `discover_plugins`' "first-seen per
+/// name" is also sorted-order-first. `None` if the manifest is missing/garbled or no installed
+/// plugin carries that name.
+pub fn resolve_plugin_full_key(home: &Path, bare_name: &str) -> Option<String> {
+    let manifest = ClaudeProvider::plugins_dir(home).join("installed_plugins.json");
+    let text = std::fs::read_to_string(&manifest).ok()?;
+    let json: serde_json::Value = serde_json::from_str(&text).ok()?;
+    let plugins = json.get("plugins")?.as_object()?;
+    let mut keys: Vec<&String> = plugins.keys().collect();
+    keys.sort();
+    keys.into_iter()
+        .find(|k| k.split('@').next().unwrap_or(k) == bare_name)
+        .cloned()
+}
+
 /// Per-repo disable for Claude user/project skills uses `skillOverrides` (research.md §4).
 /// Plugin skills are NOT affected by `skillOverrides` (docs/en/skills) — they are disabled
 /// per-repo via a `permissions.deny` rule instead (see `plugin_skill_perm_name`).
@@ -147,7 +167,7 @@ pub fn plugin_skill_perm_name(source_id: &str, id: &str) -> Option<String> {
 /// A `Skill(<plugin>:<id>)` segment must be a non-empty run of `[A-Za-z0-9_.-]` — the shape real
 /// plugin names and skill ids take, and nothing that can break out of the rule's parentheses or
 /// the rule's `:` separator.
-fn is_valid_perm_segment(s: &str) -> bool {
+pub fn is_valid_perm_segment(s: &str) -> bool {
     !s.is_empty()
         && s.bytes()
             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'.' | b'-'))

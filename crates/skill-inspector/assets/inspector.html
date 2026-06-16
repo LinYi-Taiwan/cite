@@ -5,92 +5,126 @@
 <title>Skills in this project</title>
 <!--INVENTORY_DATA-->
 <style>
+  /* shadcn-flavored zinc palette: white cards float on a gray page, every block is a
+     bordered container with a tinted header band, so groups are easy to tell apart. */
   :root {
-    --user:#457b9d; --project:#2a9d8f; --plugin:#9b5de5; --other:#e76f51;
-    --bg:#fafaf8; --panel:#fff; --ink:#222; --muted:#6b6b6b; --line:#e3e3de;
-    --active:#2a9d8f; --folder:#e9a23b; --global:#e63946; --warn:#e63946;
+    --bg:#f4f4f5; --card:#ffffff; --subtle:#fafafa;
+    --ink:#09090b; --muted:#71717a; --line:#e4e4e7; --line-strong:#d4d4d8;
+    --accent:#18181b; --active:#16a34a; --folder:#d97706; --global:#dc2626; --warn:#dc2626;
+    --radius:10px; --radius-sm:7px;
+    --shadow-sm:0 1px 2px 0 rgb(0 0 0 / .05);
+    --shadow-md:0 4px 16px -4px rgb(0 0 0 / .12);
+    --ring:0 0 0 3px rgb(24 24 27 / .08);
   }
   * { box-sizing:border-box; }
-  body { margin:0; font:13px/1.45 -apple-system,'Helvetica Neue',Arial,sans-serif; color:var(--ink); background:var(--bg); }
-  header { display:flex; gap:14px; align-items:center; padding:10px 16px; background:#fff; border-bottom:1px solid var(--line); flex-wrap:wrap; position:sticky; top:0; z-index:5; }
-  header h1 { font-size:15px; margin:0; font-weight:600; }
-  #search { border:1px solid #ccc; border-radius:6px; padding:5px 10px; font-size:13px; width:280px; }
+  body { margin:0; font:13px/1.5 -apple-system,'Helvetica Neue',Arial,sans-serif; color:var(--ink); background:var(--bg); -webkit-font-smoothing:antialiased; }
+  header { display:flex; gap:14px; align-items:center; padding:12px 20px; background:var(--card); border-bottom:1px solid var(--line); flex-wrap:wrap; position:sticky; top:0; z-index:5; }
+  header h1 { font-size:15px; margin:0; font-weight:600; letter-spacing:-.01em; }
+  #search { border:1px solid var(--line-strong); border-radius:var(--radius-sm); padding:6px 11px; font-size:13px; width:280px; outline:none; background:var(--card); color:var(--ink); transition:border-color .15s, box-shadow .15s; }
+  #search::placeholder { color:#a1a1aa; }
+  #search:focus { border-color:#a1a1aa; box-shadow:var(--ring); }
   .meta { color:var(--muted); font-size:12px; }
-  main { max-width:1280px; margin:0 auto; padding:16px; }
+  main { max-width:1280px; margin:0 auto; padding:20px; }
   /* inventory: two scopes side by side — global (left) | project (right) */
-  #inventory { display:grid; grid-template-columns:1fr 1fr; gap:16px; align-items:start; }
-  /* clusters + context: full-width row below the two columns */
-  #aux { margin-top:16px; display:grid; grid-template-columns:1fr 1fr; gap:16px; align-items:start; }
+  #inventory { display:grid; grid-template-columns:1fr 1fr; gap:20px; align-items:start; }
   @media (max-width:860px) {
-    #inventory, #aux { grid-template-columns:1fr; }
+    #inventory { grid-template-columns:1fr; }
   }
-  section { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px 14px; }
-  section h2 { font-size:13px; margin:0 0 8px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); }
-  .skill { border:1px solid var(--line); border-radius:6px; padding:10px 12px; margin-bottom:8px; }
-  .skill .row1 { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
-  .skill .name { font-weight:600; }
-  .skill .desc { color:var(--ink); margin:4px 0; }
-  .skill .loc { color:var(--muted); font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .badge { font-size:11px; padding:1px 7px; border-radius:10px; color:#fff; }
-  .b-active { background:var(--active); } .b-folder { background:var(--folder); } .b-global { background:var(--global); }
-  .b-src { background:#888; } .b-incomplete { background:#b08968; } .b-agent { background:#333; }
-  .actions { margin-top:8px; display:flex; gap:6px; flex-wrap:wrap; }
-  button { font:inherit; font-size:12px; padding:3px 9px; border:1px solid #ccc; border-radius:6px; background:#fff; cursor:pointer; }
-  button:hover { background:#f0f0ec; }
-  button.danger { color:var(--global); border-color:var(--global); }
-  .cluster { border:1px solid var(--line); border-radius:6px; padding:8px 10px; margin-bottom:8px; }
-  .cluster .ck { font-weight:600; }
-  .cluster .reason { color:var(--muted); font-size:12px; margin:3px 0; }
-  .cluster ul { margin:4px 0 0; padding-left:18px; }
-  .advisory { font-size:11px; color:var(--muted); font-style:italic; margin-bottom:8px; }
-  .empty { color:var(--muted); font-style:italic; }
-  /* per-repo source sections */
-  #inventory > section + section { margin-top:14px; }
-  .sec-head { display:flex; align-items:baseline; gap:8px; margin:0 0 8px; }
-  .sec-head h2 { margin:0; }
+
+  /* header tools: icon buttons (right) that open clusters / context as popovers */
+  .hdr-tools { margin-left:auto; display:flex; gap:8px; align-items:center; }
+  .hdr-tool { position:relative; }
+  .icon-btn { position:relative; display:inline-flex; align-items:center; justify-content:center; width:34px; height:34px; padding:0; border:1px solid var(--line-strong); border-radius:var(--radius-sm); background:var(--card); color:var(--ink); cursor:pointer; transition:background .15s, border-color .15s, box-shadow .15s; }
+  .icon-btn:hover { background:var(--subtle); }
+  .icon-btn.open { background:var(--subtle); border-color:#a1a1aa; box-shadow:var(--ring); }
+  .icon-btn svg { width:18px; height:18px; }
+  .icon-badge { position:absolute; top:-6px; right:-6px; min-width:16px; height:16px; padding:0 4px; border-radius:999px; background:var(--accent); color:#fff; font-size:10px; line-height:16px; font-weight:600; text-align:center; }
+  .popover { position:absolute; top:calc(100% + 8px); right:0; width:380px; max-width:calc(100vw - 32px); max-height:70vh; overflow:auto; background:var(--card); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow-md); display:none; z-index:40; }
+  .popover.open { display:block; }
+  .pop-head { position:sticky; top:0; padding:11px 14px; border-bottom:1px solid var(--line); background:var(--subtle); border-radius:var(--radius) var(--radius) 0 0; }
+  .pop-head h2 { font-size:12px; margin:0; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--ink); }
+  .pop-body { padding:12px 14px; }
+
+  /* top-level column = a card with a tinted header band + padded body */
+  section { background:var(--card); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow-sm); overflow:hidden; }
+  .sec-head { display:flex; align-items:baseline; gap:10px; padding:13px 16px; border-bottom:1px solid var(--line); background:var(--subtle); flex-wrap:wrap; }
+  .sec-head h2 { font-size:12px; margin:0; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--ink); }
   .sec-note { font-size:11px; color:var(--muted); font-weight:400; text-transform:none; letter-spacing:0; }
-  .skill .note { font-size:11px; color:var(--muted); margin-top:6px; }
-  .ctx-unavail { color:var(--muted); font-style:italic; }
-  .labels { font-size:11px; color:#3a3a8a; }
-  .warnmsg { color:var(--warn); font-size:11px; margin-top:4px; }
-  code { background:#f0f0ec; border-radius:3px; padding:0 3px; }
+  .sec-body { padding:14px 16px; }
 
-  /* sub-group heading inside the global column */
-  .subhead { display:flex; align-items:baseline; gap:8px; margin:14px 0 8px; }
-  .subhead:first-child { margin-top:0; }
-  .subhead h3 { font-size:12px; margin:0; font-weight:600; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); }
-  .subhead .sub-note { font-size:11px; color:var(--muted); }
+  /* source group = a nested container inside the global column, its own header band */
+  .group { border:1px solid var(--line); border-radius:var(--radius-sm); background:var(--card); overflow:hidden; }
+  .group + .group { margin-top:14px; }
+  .group-head { display:flex; align-items:baseline; gap:8px; padding:9px 12px; background:var(--subtle); border-bottom:1px solid var(--line); flex-wrap:wrap; }
+  .group-head h3 { font-size:11px; margin:0; font-weight:600; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); }
+  .group-note { font-size:11px; color:var(--muted); }
+  .group-body { padding:10px 12px; background:var(--subtle); }
+  .skill-list { display:flex; flex-direction:column; gap:8px; }
 
-  /* simplified card: clickable name + path + a single toggle */
+  /* plugin sub-group = one installed plugin, with a whole-plugin (global) on/off toggle */
+  .plugin-sub { border:1px solid var(--line); border-radius:var(--radius-sm); background:var(--card); overflow:hidden; }
+  .plugin-sub + .plugin-sub { margin-top:10px; }
+  .plugin-head { display:flex; align-items:center; gap:8px; padding:8px 12px; border-bottom:1px solid var(--line); background:var(--card); }
+  .plugin-head .plugin-name { font-weight:600; color:var(--ink); }
+  .plugin-head .plugin-tag { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
+  .plugin-head .spacer { flex:1; }
+  .plugin-sub .skill-list { padding:8px 10px; background:var(--subtle); }
+
+  /* skill row = a white card that pops against the tinted group body */
+  .skill { border:1px solid var(--line); border-radius:var(--radius-sm); padding:10px 12px; background:var(--card); transition:border-color .15s, box-shadow .15s; }
+  .skill:hover { border-color:var(--line-strong); box-shadow:var(--shadow-sm); }
   .skill .head { display:flex; align-items:center; gap:10px; }
-  .skill .name { cursor:pointer; }
+  .skill .name { font-weight:600; cursor:pointer; color:var(--ink); }
   .skill .name:hover { text-decoration:underline; }
   .skill .spacer { flex:1; }
+  .skill .loc { color:var(--muted); font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:4px; }
+  .skill .note { font-size:11px; color:var(--muted); margin-top:6px; }
+
+  .badge { font-size:11px; padding:1px 7px; border-radius:999px; color:#fff; }
+  .b-active { background:var(--active); } .b-folder { background:var(--folder); } .b-global { background:var(--global); }
+  .b-src { background:#a1a1aa; } .b-incomplete { background:#b08968; } .b-agent { background:var(--accent); }
+
+  .empty { color:var(--muted); font-style:italic; }
+  .advisory { font-size:11px; color:var(--muted); font-style:italic; margin-bottom:10px; }
+  .ctx-unavail { color:var(--muted); font-style:italic; }
+  .warnmsg { color:var(--warn); font-size:11px; margin-top:4px; }
+  code { background:#f4f4f5; border:1px solid var(--line); border-radius:4px; padding:0 4px; font-size:12px; }
+
+  /* overlap cluster + context entries = bordered cards */
+  .cluster { border:1px solid var(--line); border-radius:var(--radius-sm); padding:10px 12px; background:var(--subtle); }
+  .cluster + .cluster { margin-top:8px; }
+  .cluster .ck { font-weight:600; }
+  .cluster .reason { color:var(--muted); font-size:12px; margin:3px 0; }
+  .cluster ul { margin:6px 0 0; padding-left:18px; }
+  #context > div + div { margin-top:8px; }
+  #context ul { margin:4px 0 0; padding-left:18px; }
+
+  /* shadcn switch */
   .switch { position:relative; display:inline-block; width:40px; height:22px; flex:0 0 auto; }
   .switch input { opacity:0; width:0; height:0; }
-  .slider { position:absolute; inset:0; cursor:pointer; background:#c4c4c4; border-radius:22px; transition:.15s; }
-  .slider:before { content:""; position:absolute; height:16px; width:16px; left:3px; top:3px; background:#fff; border-radius:50%; transition:.15s; }
+  .slider { position:absolute; inset:0; cursor:pointer; background:#d4d4d8; border-radius:999px; transition:.15s; }
+  .slider:before { content:""; position:absolute; height:16px; width:16px; left:3px; top:3px; background:#fff; border-radius:50%; transition:.15s; box-shadow:0 1px 2px rgb(0 0 0 / .2); }
   .switch input:checked + .slider { background:var(--active); }
   .switch input:checked + .slider:before { transform:translateX(18px); }
   .switch input:disabled + .slider { opacity:.45; cursor:not-allowed; }
 
   /* modal: click a skill name → read its SKILL.md here */
-  .modal-backdrop { position:fixed; inset:0; background:rgba(0,0,0,.4); display:none; align-items:flex-start; justify-content:center; padding:5vh 16px; z-index:50; }
+  .modal-backdrop { position:fixed; inset:0; background:rgb(9 9 11 / .5); display:none; align-items:flex-start; justify-content:center; padding:5vh 16px; z-index:50; backdrop-filter:blur(2px); }
   .modal-backdrop.open { display:flex; }
-  .modal { background:var(--panel); border-radius:10px; width:100%; max-width:720px; max-height:80vh; display:flex; flex-direction:column; box-shadow:0 12px 40px rgba(0,0,0,.25); }
-  .modal-head { display:flex; align-items:baseline; gap:10px; padding:14px 16px 10px; border-bottom:1px solid var(--line); }
+  .modal { background:var(--card); border:1px solid var(--line); border-radius:var(--radius); width:100%; max-width:720px; max-height:80vh; display:flex; flex-direction:column; box-shadow:var(--shadow-md); }
+  .modal-head { display:flex; align-items:baseline; gap:10px; padding:14px 16px; border-bottom:1px solid var(--line); background:var(--subtle); border-radius:var(--radius) var(--radius) 0 0; }
   .modal-head .m-name { font-weight:600; font-size:15px; }
   .modal-head .m-path { color:var(--muted); font-size:11px; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .modal-head .m-close { font-size:20px; line-height:1; padding:0 6px; border:none; background:none; color:var(--muted); cursor:pointer; }
-  .modal-head .m-close:hover { color:var(--ink); background:none; }
-  .modal-body { padding:14px 16px; overflow:auto; }
+  .modal-head .m-close { font-size:20px; line-height:1; padding:0 6px; border:none; background:none; color:var(--muted); cursor:pointer; border-radius:6px; }
+  .modal-head .m-close:hover { color:var(--ink); background:#e4e4e7; }
+  .modal-body { padding:16px; overflow:auto; }
   .md h1,.md h2,.md h3 { margin:.6em 0 .3em; line-height:1.25; }
   .md h1 { font-size:18px; } .md h2 { font-size:16px; } .md h3 { font-size:14px; }
   .md p { margin:.5em 0; } .md ul,.md ol { margin:.4em 0; padding-left:20px; }
-  .md pre { background:#f4f4f0; padding:8px 10px; border-radius:6px; overflow:auto; }
-  .md pre code { background:none; padding:0; }
-  .md a { color:#2a6f9e; }
-  .md blockquote { margin:.4em 0; padding-left:10px; border-left:3px solid var(--line); color:var(--muted); }
+  .md pre { background:#f4f4f5; border:1px solid var(--line); padding:10px 12px; border-radius:var(--radius-sm); overflow:auto; }
+  .md pre code { background:none; border:none; padding:0; }
+  .md a { color:#2563eb; }
+  .md blockquote { margin:.4em 0; padding-left:10px; border-left:3px solid var(--line-strong); color:var(--muted); }
 </style>
 </head>
 <body>
@@ -99,20 +133,38 @@
   <input id="search" type="search" aria-label="Filter skills by name or description" placeholder="filter by name or description…" autocomplete="off">
   <span class="meta" id="summary"></span>
   <span class="meta" id="projpath"></span>
+  <!-- Overlap clusters + activation/context live here as click-to-open popovers, with a count
+       badge so they're discoverable without scrolling to the bottom of a long inventory. -->
+  <div class="hdr-tools">
+    <div class="hdr-tool">
+      <button class="icon-btn" id="btn-clusters" aria-haspopup="dialog" aria-expanded="false" aria-label="Overlap clusters" title="Overlap clusters">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="12" r="6"/><circle cx="15" cy="12" r="6"/></svg>
+        <span class="icon-badge" id="badge-clusters" hidden>0</span>
+      </button>
+      <div class="popover" id="pop-clusters" role="dialog" aria-label="Overlap clusters">
+        <div class="pop-head"><h2>Overlap clusters</h2></div>
+        <div class="pop-body">
+          <div class="advisory">Advisory suggestions — nothing is changed without an explicit action.</div>
+          <div id="clusters"></div>
+        </div>
+      </div>
+    </div>
+    <div class="hdr-tool">
+      <button class="icon-btn" id="btn-context" aria-haspopup="dialog" aria-expanded="false" aria-label="Activation and context" title="Activation &amp; context">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2 2 7l10 5 10-5-10-5Z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></svg>
+        <span class="icon-badge" id="badge-context" hidden>0</span>
+      </button>
+      <div class="popover" id="pop-context" role="dialog" aria-label="Activation and context">
+        <div class="pop-head"><h2>Activation &amp; context</h2></div>
+        <div class="pop-body">
+          <div id="context"></div>
+        </div>
+      </div>
+    </div>
+  </div>
 </header>
 <main>
   <div id="inventory"></div>
-  <div id="aux">
-    <section id="clusters-sec">
-      <h2>Overlap clusters</h2>
-      <div class="advisory">Advisory suggestions — nothing is changed without an explicit action.</div>
-      <div id="clusters"></div>
-    </section>
-    <section id="context-sec">
-      <h2>Activation &amp; context</h2>
-      <div id="context"></div>
-    </section>
-  </div>
 </main>
 
 <div class="modal-backdrop" id="modal" role="dialog" aria-modal="true" aria-labelledby="modal-name">
@@ -150,7 +202,7 @@ function esc(s) { return (s==null?"":String(s)).replace(/[&<>"]/g, c => ({"&":"&
 const KIND_META = {
   project:       { title: "This project's skills", note: "from ./.claude/skills" },
   user:          { title: "Personal / global skills", note: "turning one off applies to THIS repo only — your global skill and other repos stay untouched" },
-  plugin:        { title: "Plugin skills", note: "disabled per-repo via a permissions.deny rule" },
+  plugin:        { title: "Plugin skills", note: "per-skill toggle = block in THIS repo; the per-plugin switch turns the WHOLE plugin on/off for every project" },
   "other-agent": { title: "Other agents", note: "no per-repo toggle for this source" },
 };
 // Left "Global" column, in sub-heading order. "project" lives in its own right-hand column.
@@ -185,32 +237,52 @@ function render() {
   const groups = {};
   filtered.forEach(s => { const k = kindOf(s, kinds); (groups[k] = groups[k] || []).push(s); });
 
-  // Left column: personal + plugin + other-agent, each under its own sub-heading.
+  // Left column: personal + plugin + other-agent, each in its own bordered container so the
+  // sources are easy to tell apart.
   let globalHtml = "";
   GLOBAL_KINDS.forEach(kind => {
     const list = groups[kind];
     if (!list || !list.length) return;
     const meta = KIND_META[kind] || { title: kind, note: "" };
-    globalHtml += `<div class="subhead"><h3>${esc(meta.title)}</h3>`
-                + `<span class="sub-note">${esc(meta.note)}</span></div>`
-                + list.map(s => card(s, kind)).join("");
+    // Plugin skills are sub-grouped per plugin so each can carry a whole-plugin (global) toggle.
+    const body = kind === "plugin"
+      ? pluginGroupsHtml(list)
+      : `<div class="skill-list">${list.map(s => card(s, kind)).join("")}</div>`;
+    globalHtml += `<div class="group">`
+                + `<div class="group-head"><h3>${esc(meta.title)}</h3>`
+                + `<span class="group-note">${esc(meta.note)}</span></div>`
+                + `<div class="group-body">${body}</div>`
+                + `</div>`;
   });
   const globalSec = `<section><div class="sec-head"><h2>Global</h2>`
     + `<span class="sec-note">installed on this machine — toggling affects THIS repo only</span></div>`
-    + (globalHtml || `<div class="empty">No global skills match.</div>`) + `</section>`;
+    + `<div class="sec-body">${globalHtml || `<div class="empty">No global skills match.</div>`}</div></section>`;
 
   // Right column: this project's skills.
   const projList = groups["project"] || [];
   const projMeta = KIND_META["project"];
+  const projBody = projList.length
+    ? `<div class="skill-list">${projList.map(s => card(s, "project")).join("")}</div>`
+    : `<div class="empty">No project skills match.</div>`;
   const projSec = `<section><div class="sec-head"><h2>Project</h2>`
     + `<span class="sec-note">${esc(projMeta.note)}</span></div>`
-    + (projList.length ? projList.map(s => card(s, "project")).join("") : `<div class="empty">No project skills match.</div>`)
-    + `</section>`;
+    + `<div class="sec-body">${projBody}</div></section>`;
 
   document.getElementById("inventory").innerHTML = globalSec + projSec;
 
   renderClusters();
   renderContext();
+  setBadge("badge-clusters", (EXPORT.clusters || []).length);
+  setBadge("badge-context", (EXPORT.context_loads || []).length);
+}
+
+// Count badge on a header icon: show the number when there's content, hide it at zero so an
+// empty panel doesn't draw the eye.
+function setBadge(id, n) {
+  const b = document.getElementById(id);
+  if (!b) return;
+  b.textContent = n > 99 ? "99+" : String(n);
+  b.hidden = n === 0;
 }
 
 // One card: clickable name (opens the SKILL.md in a modal), the on-disk path, and a single on/off
@@ -221,12 +293,17 @@ function card(s, kind) {
   const nm = esc(s.name || s.id);
   const path = esc(s.path);
   const on = s.state === "active";
-  const toggleable = canTogglePerRepo(kind) && !window.__EXPORT__;
-  const title = !canTogglePerRepo(kind) ? "no per-repo toggle for this source"
+  // A plugin switched off via `enabledPlugins` is inert in EVERY project — a per-repo toggle can't
+  // bring it back, so don't pretend it can. The user must re-enable the plugin in Claude Code.
+  const pluginOff = s.state === "disabled-plugin";
+  const toggleable = canTogglePerRepo(kind) && !pluginOff && !window.__EXPORT__;
+  const title = pluginOff ? "this plugin is switched off globally — enable the plugin in Claude Code to use it"
+              : !canTogglePerRepo(kind) ? "no per-repo toggle for this source"
               : (on ? "enabled — flip to disable in this repo" : "disabled in this repo — flip to enable");
-  const pluginNote = kind === "plugin"
-    ? `<div class="note">plugin · disabled per-repo via a <code>permissions.deny</code> rule — it stops triggering in this repo, but may still appear in <code>/skills</code>.</div>`
-    : "";
+  const pluginNote = kind !== "plugin" ? ""
+    : pluginOff
+      ? `<div class="note">plugin · <strong>not enabled</strong> — this plugin is off in Claude Code (<code>enabledPlugins</code> is false or unset in <code>settings.json</code>), so none of its skills trigger in any project. Enable the plugin in Claude Code to use it.</div>`
+      : `<div class="note">plugin · per-repo toggle writes a <code>permissions.deny</code> rule — turning it off stops it triggering in this repo, but it may still appear in <code>/skills</code>.</div>`;
   return `<div class="skill" data-key="${k}">
     <div class="head">
       <span class="name" data-act="open" data-key="${k}" data-name="${nm}" data-path="${path}" title="Open SKILL.md">${nm}</span>
@@ -239,6 +316,36 @@ function card(s, kind) {
     <div class="loc" title="${path}">${path}</div>
     ${pluginNote}
   </div>`;
+}
+
+// Plugin skills, sub-grouped by plugin. Each sub-group header carries a whole-plugin on/off switch
+// that writes the GLOBAL `enabledPlugins` flag (affects every project, not just this repo). The
+// switch is "on" unless every skill in the plugin is `disabled-plugin` (plugin off in settings).
+function pluginGroupsHtml(list) {
+  const byPlugin = {};
+  list.forEach(s => { (byPlugin[s.source_id] = byPlugin[s.source_id] || []).push(s); });
+  return Object.keys(byPlugin).sort().map(sourceId => {
+    const skills = byPlugin[sourceId];
+    const bare = sourceId.replace(/^claude:plugin:/, "");
+    // The plugin is OFF only when EVERY skill is `disabled-plugin` (the invariant: enabledPlugins
+    // is per-plugin, so it's all-or-nothing). `.every` fails safe — any unexpected state shows OFF.
+    const enabled = !skills.every(s => s.state === "disabled-plugin");
+    const can = !window.__EXPORT__;
+    const ttl = enabled
+      ? "plugin is ON — flip to disable the WHOLE plugin for ALL projects (writes enabledPlugins:false)"
+      : "plugin is OFF — flip to enable the WHOLE plugin for ALL projects (writes enabledPlugins:true)";
+    return `<div class="plugin-sub">`
+      + `<div class="plugin-head">`
+      + `<span class="plugin-name">${esc(bare)}</span>`
+      + `<span class="plugin-tag">whole plugin · global</span>`
+      + `<span class="spacer"></span>`
+      + `<label class="switch" title="${esc(ttl)}">`
+      + `<input type="checkbox" data-act="plugin" data-plugin="${esc(bare)}" aria-label="${esc(bare)} — enable or disable the whole plugin for all projects" ${enabled ? "checked" : ""} ${can ? "" : "disabled"}>`
+      + `<span class="slider"></span></label>`
+      + `</div>`
+      + `<div class="skill-list">${skills.map(s => card(s, "plugin")).join("")}</div>`
+      + `</div>`;
+  }).join("");
 }
 
 function renderClusters() {
@@ -277,8 +384,19 @@ async function post(action, payload) {
 // The single per-card control: flip the toggle to enable/disable. Always PER-REPO — the request
 // carries this project's folder and the server confines the write to its own settings.local.json.
 async function toggleSkill(key, enable) {
-  if (window.__EXPORT__) { alert("Static snapshot — run `cite inspect serve` to change skills."); return; }
+  if (window.__EXPORT__) { alert("Static snapshot — run `cite serve` to change skills."); return; }
   await act(enable ? "enable" : "disable", key);
+}
+
+// Whole-plugin switch: writes the GLOBAL `enabledPlugins` flag (every project). After it lands,
+// reload the inventory so the plugin's skills flip to/from `disabled-plugin`, and remind the user
+// it needs /reload-plugins to take effect in a running session.
+async function togglePlugin(plugin, enable) {
+  if (window.__EXPORT__) { alert("Static snapshot — run `cite serve` to change plugins."); return; }
+  const r = await post("plugin", { plugin, enabled: enable });
+  if (!r.ok) { await reload(); alert("Plugin toggle failed: " + (r.error || "unknown")); return; }
+  await reload();
+  alert(`Plugin "${plugin}" ${enable ? "enabled" : "disabled"} globally (all projects).\n\nRun /reload-plugins (or restart Claude Code) for it to take effect in your running session.`);
 }
 
 async function act(action, key) {
@@ -303,7 +421,7 @@ async function openModal(key, name, path, trigger) {
   modal.classList.add("open");
   document.getElementById("modal-close").focus();
   if (window.__EXPORT__) {
-    body.innerHTML = '<div class="empty">Static snapshot — run <code>cite inspect serve</code> to read SKILL.md.</div>';
+    body.innerHTML = '<div class="empty">Static snapshot — run <code>cite serve</code> to read SKILL.md.</div>';
     return;
   }
   body.innerHTML = '<div class="empty">loading…</div>';
@@ -390,9 +508,29 @@ document.getElementById("modal").addEventListener("click", (e) => { if (e.target
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape" && document.getElementById("modal").classList.contains("open")) closeModal();
 });
+
+// Header popovers: click an icon to open its panel (clusters / context); only one open at a time.
+// Closes on outside-click or Escape.
+function closePopovers() {
+  document.querySelectorAll(".popover.open").forEach(p => p.classList.remove("open"));
+  document.querySelectorAll(".icon-btn.open").forEach(b => { b.classList.remove("open"); b.setAttribute("aria-expanded", "false"); });
+}
+function togglePopover(btnId, popId) {
+  const btn = document.getElementById(btnId), pop = document.getElementById(popId);
+  const willOpen = !pop.classList.contains("open");
+  closePopovers();
+  if (willOpen) { pop.classList.add("open"); btn.classList.add("open"); btn.setAttribute("aria-expanded", "true"); }
+}
+document.getElementById("btn-clusters").addEventListener("click", (e) => { e.stopPropagation(); togglePopover("btn-clusters", "pop-clusters"); });
+document.getElementById("btn-context").addEventListener("click", (e) => { e.stopPropagation(); togglePopover("btn-context", "pop-context"); });
+// Outside-click closes (clicks inside a .hdr-tool — button or popover body — keep it open).
+document.addEventListener("click", (e) => { if (!e.target.closest(".hdr-tool")) closePopovers(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closePopovers(); });
 // Flip a toggle → enable/disable. Re-render afterwards so the switch reflects the real state
 // (it snaps back if the action was cancelled or failed).
 skillsEl.addEventListener("change", async (e) => {
+  const pluginBox = e.target.closest('input[data-act="plugin"]');
+  if (pluginBox) { await togglePlugin(pluginBox.getAttribute("data-plugin"), pluginBox.checked); return; }
   const box = e.target.closest('input[data-act="toggle"]');
   if (!box) return;
   await toggleSkill(box.getAttribute("data-key"), box.checked);

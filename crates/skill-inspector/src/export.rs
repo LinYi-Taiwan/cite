@@ -108,6 +108,7 @@ fn project_nodes(skills: &[Skill], sources: &[SkillSource]) -> Vec<Node> {
             match s.state {
                 SkillState::DisabledInFolder => flags.push("disabled-in-folder"),
                 SkillState::DisabledGlobal => flags.push("disabled-global"),
+                SkillState::DisabledPlugin => flags.push("disabled-plugin"),
                 SkillState::Active => {}
             }
             Node {

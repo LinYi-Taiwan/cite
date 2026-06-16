@@ -23,6 +23,8 @@ pub struct ActionCtx<'a> {
     pub inventory: &'a Inventory,
     /// The server's configured project root — the only folder a Tier-1 disable may target.
     pub project_root: PathBuf,
+    /// User home — locates `~/.claude/settings.json` for the whole-plugin enable/disable switch.
+    pub home: PathBuf,
     pub state_path: PathBuf,
     pub quarantine_dir: PathBuf,
     pub trash_dir: PathBuf,
@@ -53,6 +55,7 @@ pub fn dispatch(ctx: &ActionCtx, action: &str, req: &Value) -> Value {
     match action {
         "disable" => disable(ctx, req),
         "enable" => enable(ctx, req),
+        "plugin" => plugin_set_enabled(ctx, req),
         "remove" => remove(ctx, req),
         "label" => label(ctx, req),
         other => json!({ "ok": false, "error": format!("unknown_action: {other}") }),
@@ -240,6 +243,40 @@ fn enable(ctx: &ActionCtx, req: &Value) -> Value {
     }
 }
 
+/// Whole-plugin enable/disable: flip `enabledPlugins["<name>@<mkt>"]` in `~/.claude/settings.json`.
+/// Request: `{ "plugin": "<bare-name>", "enabled": <bool> }`. Unlike the per-repo skill toggles,
+/// this is a GLOBAL switch (every project) — it affects all of the plugin's skills at once. The
+/// change applies to a running session only after `/reload-plugins` (surfaced in the response).
+fn plugin_set_enabled(ctx: &ActionCtx, req: &Value) -> Value {
+    let Some(plugin) = req.get("plugin").and_then(|v| v.as_str()) else {
+        return err("plugin_required");
+    };
+    let Some(enabled) = req.get("enabled").and_then(|v| v.as_bool()) else {
+        return err("enabled_required");
+    };
+    // Guard the request-supplied name to the same allowlist plugin/skill segments must satisfy,
+    // rejecting junk before it ever reaches the manifest lookup (consistent with the write path).
+    if !crate::scan::claude::is_valid_perm_segment(plugin) {
+        return err("invalid_plugin_name");
+    }
+    // Resolve the bare name to the exact `"<name>@<marketplace>"` Claude keys on. The written key
+    // comes from the trusted manifest (not the request), so there is no injection surface here.
+    let Some(full_key) = crate::scan::claude::resolve_plugin_full_key(&ctx.home, plugin) else {
+        return err("plugin_not_found");
+    };
+    let settings_json = ctx.home.join(".claude").join("settings.json");
+    match crate::settings::set_plugin_enabled(&settings_json, &full_key, enabled) {
+        Ok(previous) => json!({
+            "ok": true,
+            "plugin": full_key,
+            "enabled": enabled,
+            "previous": previous,
+            "note": "takes effect after /reload-plugins or restarting Claude Code"
+        }),
+        Err(e) => json!({ "ok": false, "error": format!("write_failed: {e}") }),
+    }
+}
+
 fn remove(ctx: &ActionCtx, req: &Value) -> Value {
     let Some(skill_key) = req.get("skill_key").and_then(|v| v.as_str()) else {
         return err("skill_key_required");
@@ -318,5 +355,6 @@ pub fn state_str(state: SkillState) -> &'static str {
         SkillState::Active => "active",
         SkillState::DisabledInFolder => "disabled-in-folder",
         SkillState::DisabledGlobal => "disabled-global",
+        SkillState::DisabledPlugin => "disabled-plugin",
     }
 }

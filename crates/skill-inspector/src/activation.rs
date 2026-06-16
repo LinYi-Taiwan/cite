@@ -25,6 +25,10 @@ pub fn compute(inventory: &Inventory, context: &str) -> Vec<ActivationState> {
 }
 
 fn eligible(skill: &Skill) -> bool {
-    // Present in an active root (active or folder-disabled) ⇒ eligible; quarantined ⇒ not.
-    !matches!(skill.state, SkillState::DisabledGlobal)
+    // Present in an active root (active or folder-disabled) ⇒ eligible; quarantined OR owned by
+    // a globally-disabled plugin ⇒ not (the latter is on disk but cannot trigger anywhere).
+    !matches!(
+        skill.state,
+        SkillState::DisabledGlobal | SkillState::DisabledPlugin
+    )
 }

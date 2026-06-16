@@ -70,6 +70,7 @@ impl Env {
         let ctx = ActionCtx {
             inventory: &inv,
             project_root: self.project.clone(),
+            home: self.home.clone(),
             state_path: self.state_path.clone(),
             quarantine_dir: self.quarantine_dir.clone(),
             trash_dir: self.trash_dir.clone(),
