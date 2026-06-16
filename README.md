@@ -11,16 +11,17 @@ Safe-by-default is **structural**, not just disciplined: `scan` / `overlap` / `a
 
 ## Install
 
-If you have Node (≥ 18), run it straight from npm — the install step downloads the
-prebuilt native binary for your platform from the GitHub Release:
+With a Rust toolchain, install the `cite` command straight from the repo — this
+compiles and drops the binary in `~/.cargo/bin` (on your `PATH`):
 
-    npx @linyi-taiwan/cite scan          # one-off
-    npm i -g @linyi-taiwan/cite          # then: cite scan / cite serve
+    cargo install --git https://github.com/LinYi-Taiwan/cite --locked
+    cite serve
 
-No Node? Grab a prebuilt binary from the [Releases page](https://github.com/LinYi-Taiwan/cite/releases),
-extract, and run `./cite`. Prebuilt targets: macOS (arm64 + x64) and Linux (x64).
+No Rust? Grab a prebuilt binary from the [Releases page](https://github.com/LinYi-Taiwan/cite/releases),
+extract, and run `./cite` (move it onto your `PATH` for `cite serve`). Prebuilt
+targets: macOS (arm64 + x64) and Linux (x64).
 
-From source (any platform with a Rust toolchain), see Build below.
+To hack on it from a clone, see Build below.
 
 ## Build
 
