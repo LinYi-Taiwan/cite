@@ -308,10 +308,12 @@ function card(s, kind) {
               : isPlugin ? "plugin skills are all-or-nothing — use the plugin switch above to turn the WHOLE plugin on/off"
               : !canTogglePerRepo(kind) ? "no per-repo toggle for this source"
               : (on ? "enabled — flip to disable in this repo" : "disabled in this repo — flip to enable");
-  const pluginNote = kind !== "plugin" ? ""
-    : pluginOff
-      ? `<div class="note">plugin · <strong>not enabled</strong> — this plugin is off in Claude Code (<code>enabledPlugins</code> is false or unset in <code>settings.json</code>), so none of its skills trigger in any project. Enable the plugin in Claude Code to use it.</div>`
-      : `<div class="note">plugin · controlled as a whole — use the plugin switch above; a single plugin skill can't be turned off on its own.</div>`;
+  // Only the "not enabled" case carries per-skill info worth a line. The all-or-nothing reminder is
+  // already on the plugin sub-group header (tag + note), so don't repeat it on every skill row —
+  // that's just dead vertical space.
+  const pluginNote = (kind === "plugin" && pluginOff)
+    ? `<div class="note">plugin · <strong>not enabled</strong> — this plugin is off in Claude Code (<code>enabledPlugins</code> is false or unset in <code>settings.json</code>), so none of its skills trigger in any project. Enable the plugin in Claude Code to use it.</div>`
+    : "";
   return `<div class="skill" data-key="${k}">
     <div class="head">
       <span class="name" data-act="open" data-key="${k}" data-name="${nm}" data-path="${path}" title="Open SKILL.md">${nm}</span>
