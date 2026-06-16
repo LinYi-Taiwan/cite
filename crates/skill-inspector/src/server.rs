@@ -217,7 +217,11 @@ fn handle(mut stream: TcpStream, config: &ServeConfig) -> std::io::Result<()> {
             // request whose Host isn't this loopback server — blocks DNS-rebinding / cross-origin
             // POSTs from a page the user happens to be browsing.
             if !host_is_local(&req.host) {
-                ("403 Forbidden", "text/plain", "forbidden: non-local host".to_string())
+                (
+                    "403 Forbidden",
+                    "text/plain",
+                    "forbidden: non-local host".to_string(),
+                )
             } else {
                 let action = path.trim_start_matches("/api/");
                 let resp = handle_action(config, action, &req.body);

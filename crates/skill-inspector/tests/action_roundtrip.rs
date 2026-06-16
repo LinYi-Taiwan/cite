@@ -164,7 +164,11 @@ fn enable_clears_a_file_side_override_with_no_state_record() {
 
     let after: serde_json::Value =
         serde_json::from_str(&std::fs::read_to_string(&settings).unwrap()).unwrap();
-    assert_eq!(after["permissions"]["allow"][0], json!("X"), "other keys kept");
+    assert_eq!(
+        after["permissions"]["allow"][0],
+        json!("X"),
+        "other keys kept"
+    );
     assert!(
         after["skillOverrides"].get("react-code-review").is_none(),
         "override cleared: {after}"

@@ -356,5 +356,7 @@ fn write_root(folder: &Path, root: &serde_json::Value) -> std::io::Result<()> {
     }
     let mut text = serde_json::to_string_pretty(root).map_err(std::io::Error::other)?;
     text.push('\n');
-    std::fs::write(path, text)
+    // Atomic temp+rename (matching `set_plugin_enabled`): a crash mid-write must never truncate
+    // settings.local.json to empty and drop the user's other keys (permissions, other overrides).
+    write_atomic(&path, text.as_bytes())
 }

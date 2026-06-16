@@ -224,7 +224,7 @@ fn enable(ctx: &ActionCtx, req: &Value) -> Value {
         if !Path::new(&record.quarantine_path).starts_with(&ctx.quarantine_dir) {
             return err("quarantine_path_outside_tool_dir");
         }
-        match quarantine::restore(&record) {
+        return match quarantine::restore(&record) {
             Ok(outcome) => {
                 state.quarantine.remove(idx);
                 if let Err(e) = save(&state, &ctx.state_path) {
@@ -237,10 +237,27 @@ fn enable(ctx: &ActionCtx, req: &Value) -> Value {
                 resp
             }
             Err(e) => json!({ "ok": false, "error": format!("restore_failed: {e}") }),
-        }
-    } else {
-        err("not_disabled")
+        };
     }
+
+    // Fallback: a file-side `skillOverrides[<id>]="off"` with no matching state record — the entry
+    // pre-dates the tool, the state file was cleared, or it was hand-edited. The skill still shows
+    // as disabled, so enable must clear the file override directly rather than report
+    // `not_disabled` (which broke "turn all on"). Gated like every other write path: a SCANNED
+    // skill (not an arbitrary request string), one that uses `skillOverrides` at all (user/project —
+    // never a plugin, which is `permissions.deny`), with a safe id, confined to our project root.
+    if let Some(skill) = ctx.inventory.find(skill_key) {
+        if supports_folder_scope(&skill.source_id)
+            && is_safe_component(&skill.id)
+            && crate::settings::read_override(&ctx.project_root, &skill.id).is_some()
+        {
+            return match crate::settings::clear_override(&ctx.project_root, &skill.id, None) {
+                Ok(_) => json!({ "ok": true, "state": "active" }),
+                Err(e) => json!({ "ok": false, "error": format!("write_failed: {e}") }),
+            };
+        }
+    }
+    err("not_disabled")
 }
 
 /// Whole-plugin enable/disable: flip `enabledPlugins["<name>@<mkt>"]` in `~/.claude/settings.json`.
