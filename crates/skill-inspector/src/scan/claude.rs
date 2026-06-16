@@ -110,6 +110,79 @@ impl SourceProvider for ClaudeProvider {
     }
 }
 
+/// Component paths a plugin's `.claude-plugin/plugin.json` explicitly declares. Claude loads a
+/// plugin's skills/commands from these declared paths *when present*, falling back to the
+/// convention dirs (`skills/`, `commands/`) only for a key the manifest omits. So a `None` here
+/// means "manifest didn't declare this kind → use convention"; a `Some(vec![])` means "declared
+/// none → load none" (do NOT fall back). Each path is resolved against the install dir.
+pub struct PluginManifestPaths {
+    pub skills: Option<Vec<PathBuf>>,
+    pub commands: Option<Vec<PathBuf>>,
+}
+
+/// Read the declared skill/command paths from `<install_path>/.claude-plugin/plugin.json`.
+/// Missing/garbled manifest, or a key that isn't a string array ⇒ that kind is `None` (convention).
+/// A declared path is accepted only if it resolves to a file/dir that genuinely lives inside the
+/// install dir: a lexical pre-filter (`is_contained_relative`) rejects absolute paths and `..`
+/// components, then a real-path check (`canonicalize` + prefix) rejects anything whose resolved
+/// target escapes — catching a `Normal` component (or the leaf itself) that is a symlink to
+/// outside. A non-existent path resolves to nothing ⇒ dropped (the agent can't load it either).
+pub fn read_plugin_manifest(install_path: &Path) -> PluginManifestPaths {
+    let none = PluginManifestPaths {
+        skills: None,
+        commands: None,
+    };
+    let manifest = install_path.join(".claude-plugin").join("plugin.json");
+    let Ok(text) = std::fs::read_to_string(&manifest) else {
+        return none;
+    };
+    let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) else {
+        return none;
+    };
+    let Ok(install_canon) = install_path.canonicalize() else {
+        return none;
+    };
+    let declared = |key: &str| -> Option<Vec<PathBuf>> {
+        let arr = json.get(key)?.as_array()?;
+        Some(
+            arr.iter()
+                .filter_map(|v| v.as_str())
+                .filter(|s| is_contained_relative(s))
+                .map(|s| install_path.join(s))
+                .filter(|p| resolves_within(&install_canon, p))
+                .collect(),
+        )
+    };
+    PluginManifestPaths {
+        skills: declared("skills"),
+        commands: declared("commands"),
+    }
+}
+
+/// Lexical pre-filter: a declared manifest path is *potentially* safe only if it's relative (not
+/// absolute, not a Windows drive/root) and free of any `..` component. `.` and normal components
+/// are fine. Rejects empty too. Necessary but NOT sufficient — a `Normal` component can be a
+/// symlink to outside, so `resolves_within` does the real containment check.
+fn is_contained_relative(s: &str) -> bool {
+    use std::path::Component;
+    if s.is_empty() {
+        return false;
+    }
+    Path::new(s)
+        .components()
+        .all(|c| matches!(c, Component::CurDir | Component::Normal(_)))
+}
+
+/// Real-path containment: the resolved (symlink-followed) `path` must exist and sit under
+/// `base_canon` (itself already canonicalized). A non-existent path, or one whose canonical target
+/// escapes the install dir (e.g. a planted symlink), returns false ⇒ the entry is dropped.
+fn resolves_within(base_canon: &Path, path: &Path) -> bool {
+    match path.canonicalize() {
+        Ok(real) => real.starts_with(base_canon),
+        Err(_) => false,
+    }
+}
+
 /// Resolve a bare plugin `<name>` back to the full `"<name>@<marketplace>"` key that
 /// `installed_plugins.json` (and `enabledPlugins`) use. The scanner reduces plugin source ids to
 /// the bare name, but writing the `enabledPlugins` switch needs the exact key Claude keys on.
@@ -176,4 +249,99 @@ pub fn is_valid_perm_segment(s: &str) -> bool {
 /// `Availability::Readable` predicate sugar used by `scan`.
 pub fn is_readable(a: Availability) -> bool {
     matches!(a, Availability::Readable)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn manifest_declared_paths_win_over_convention_dir() {
+        let install = std::env::temp_dir().join(format!("si-manifest-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&install);
+        std::fs::create_dir_all(install.join(".claude-plugin")).unwrap();
+        // A command declared under `test/`, NOT `commands/` — the exact "rename" scenario. The file
+        // must exist for the containment check to accept it (the agent couldn't load a phantom).
+        std::fs::create_dir_all(install.join("test")).unwrap();
+        std::fs::write(install.join("test").join("foo.md"), "x").unwrap();
+        std::fs::write(
+            install.join(".claude-plugin").join("plugin.json"),
+            r#"{"name":"p","commands":["./test/foo.md"],"skills":[]}"#,
+        )
+        .unwrap();
+
+        let m = read_plugin_manifest(&install);
+        assert_eq!(m.commands.as_deref().unwrap(), &[install.join("./test/foo.md")]);
+        // `skills: []` is declared-empty → Some(vec![]), which means "load none" (NOT convention).
+        assert_eq!(m.skills.as_deref().unwrap().len(), 0);
+
+        let _ = std::fs::remove_dir_all(&install);
+    }
+
+    #[test]
+    fn manifest_escaping_paths_are_dropped() {
+        let install = std::env::temp_dir().join(format!("si-manifest-esc-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&install);
+        std::fs::create_dir_all(install.join(".claude-plugin")).unwrap();
+        std::fs::create_dir_all(install.join("ok")).unwrap();
+        std::fs::write(install.join("ok").join("here.md"), "x").unwrap();
+        std::fs::write(
+            install.join(".claude-plugin").join("plugin.json"),
+            r#"{"name":"p","commands":["../../etc/passwd.md","/etc/shadow.md","./ok/here.md"]}"#,
+        )
+        .unwrap();
+
+        let m = read_plugin_manifest(&install);
+        // Only the contained, existing relative path survives; the `..` and absolute entries are
+        // dropped lexically, and any non-existent/escaping path is dropped by the real-path check.
+        let cmds = m.commands.unwrap();
+        assert_eq!(cmds, vec![install.join("./ok/here.md")]);
+
+        let _ = std::fs::remove_dir_all(&install);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn manifest_symlink_escape_is_dropped() {
+        // A declared component that is a *symlink to outside* the install dir passes the lexical
+        // guard but must be rejected by the canonicalize containment check.
+        let base = std::env::temp_dir().join(format!("si-manifest-sym-{}", std::process::id()));
+        let install = base.join("install");
+        let outside = base.join("outside");
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(install.join(".claude-plugin")).unwrap();
+        std::fs::create_dir_all(&outside).unwrap();
+        std::fs::write(outside.join("secret.md"), "TOP SECRET").unwrap();
+        // install/leak -> ../outside  (a symlink whose target escapes the install dir)
+        std::os::unix::fs::symlink(&outside, install.join("leak")).unwrap();
+        std::fs::write(
+            install.join(".claude-plugin").join("plugin.json"),
+            r#"{"name":"p","commands":["./leak/secret.md"]}"#,
+        )
+        .unwrap();
+
+        let m = read_plugin_manifest(&install);
+        // The symlinked path canonicalizes outside install ⇒ dropped, not exposed.
+        assert_eq!(m.commands.as_deref().unwrap().len(), 0);
+
+        let _ = std::fs::remove_dir_all(&base);
+    }
+
+    #[test]
+    fn contained_relative_predicate() {
+        assert!(is_contained_relative("./commands/x.md"));
+        assert!(is_contained_relative("skills/foo"));
+        assert!(!is_contained_relative("../escape"));
+        assert!(!is_contained_relative("a/../../b"));
+        assert!(!is_contained_relative("/abs/path"));
+        assert!(!is_contained_relative(""));
+    }
+
+    #[test]
+    fn missing_manifest_is_none_so_caller_uses_convention() {
+        let install = std::env::temp_dir().join(format!("si-manifest-none-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&install);
+        let m = read_plugin_manifest(&install);
+        assert!(m.commands.is_none() && m.skills.is_none());
+    }
 }

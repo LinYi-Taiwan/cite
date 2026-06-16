@@ -65,10 +65,20 @@
   .plugin-sub { border:1px solid var(--line); border-radius:var(--radius-sm); background:var(--card); overflow:hidden; }
   .plugin-sub + .plugin-sub { margin-top:10px; }
   .plugin-head { display:flex; align-items:center; gap:8px; padding:8px 12px; border-bottom:1px solid var(--line); background:var(--card); }
+  /* The collapse control is a real <button> (keyboard-accessible) holding the left of the header;
+     the whole-plugin switch stays OUTSIDE it (an <input> inside a <button> is invalid HTML). */
+  .plugin-toggle { display:flex; align-items:center; gap:8px; flex:1 1 auto; min-width:0; background:none; border:none; padding:0; margin:0; font:inherit; color:inherit; text-align:left; cursor:pointer; user-select:none; }
+  .plugin-toggle:focus-visible { outline:2px solid var(--accent, #2563eb); outline-offset:2px; border-radius:4px; }
   .plugin-head .plugin-name { font-weight:600; color:var(--ink); }
   .plugin-head .plugin-tag { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
-  .plugin-head .spacer { flex:1; }
+  .plugin-head .plugin-count { font-size:11px; color:var(--muted); }
+  .plugin-head .chev { color:var(--muted); font-size:10px; transition:transform .15s; flex:0 0 auto; }
+  .plugin-head .spacer { flex:0 0 auto; }
   .plugin-sub .skill-list { padding:8px 10px; background:var(--subtle); }
+  /* Collapsed by default: hide the skill list, point the chevron right. */
+  .plugin-sub.collapsed .skill-list { display:none; }
+  .plugin-sub.collapsed .plugin-head { border-bottom:none; }
+  .plugin-sub.collapsed .chev { transform:rotate(-90deg); }
 
   /* skill row = a white card that pops against the tinted group body */
   .skill { border:1px solid var(--line); border-radius:var(--radius-sm); padding:10px 12px; background:var(--card); transition:border-color .15s, box-shadow .15s; }
@@ -295,6 +305,16 @@ function card(s, kind) {
   const k = esc(`${s.agent}/${s.source_id}/${s.id}`);
   const nm = esc(s.name || s.id);
   const path = esc(s.path);
+  // Plugin skills are all-or-nothing (the whole-plugin switch lives on the sub-group header), so a
+  // per-skill row needs no toggle and no note — just the name (click → opens its file) and path.
+  if (kind === "plugin") {
+    return `<div class="skill" data-key="${k}">
+    <div class="head">
+      <span class="name" data-act="open" data-key="${k}" data-name="${nm}" data-path="${path}" title="Open contents">${nm}</span>
+      <span class="loc" title="${path}">${path}</span>
+    </div>
+  </div>`;
+  }
   const on = s.state === "active";
   // A plugin switched off via `enabledPlugins` is inert in EVERY project — a per-repo toggle can't
   // bring it back, so don't pretend it can. The user must re-enable the plugin in Claude Code.
@@ -327,6 +347,10 @@ function card(s, kind) {
   </div>`;
 }
 
+// Which plugin sub-groups are expanded, by bare name. Lives OUTSIDE render() so the expand/collapse
+// state survives a full re-render (search keystroke, toggle action) instead of snapping back closed.
+const expandedPlugins = new Set();
+
 // Plugin skills, sub-grouped by plugin. Each sub-group header carries a whole-plugin on/off switch
 // that writes the GLOBAL `enabledPlugins` flag (affects every project, not just this repo). The
 // switch is "on" unless every skill in the plugin is `disabled-plugin` (plugin off in settings).
@@ -343,16 +367,25 @@ function pluginGroupsHtml(list) {
     const ttl = enabled
       ? "plugin is ON — flip to disable the WHOLE plugin for ALL projects (writes enabledPlugins:false)"
       : "plugin is OFF — flip to enable the WHOLE plugin for ALL projects (writes enabledPlugins:true)";
-    return `<div class="plugin-sub">`
+    // Collapsed by default — many plugins each ship many skills, so an expanded list means a long
+    // scroll. The header's left part is a real <button> (keyboard-accessible) that toggles the list;
+    // the whole-plugin switch sits beside it (outside the button — invalid HTML otherwise).
+    const open = expandedPlugins.has(bare);
+    const listId = "pl-" + bare.replace(/[^a-zA-Z0-9_-]/g, "-");
+    return `<div class="plugin-sub${open ? "" : " collapsed"}" data-plugin="${esc(bare)}">`
       + `<div class="plugin-head">`
+      + `<button type="button" class="plugin-toggle" data-act="collapse" aria-expanded="${open}" aria-controls="${listId}" title="show or hide this plugin's skills">`
+      + `<span class="chev" aria-hidden="true">▾</span>`
       + `<span class="plugin-name">${esc(bare)}</span>`
+      + `<span class="plugin-count">${skills.length}</span>`
       + `<span class="plugin-tag">whole plugin · global</span>`
+      + `</button>`
       + `<span class="spacer"></span>`
       + `<label class="switch" title="${esc(ttl)}">`
       + `<input type="checkbox" data-act="plugin" data-plugin="${esc(bare)}" aria-label="${esc(bare)} — enable or disable the whole plugin for all projects" ${enabled ? "checked" : ""} ${can ? "" : "disabled"}>`
       + `<span class="slider"></span></label>`
       + `</div>`
-      + `<div class="skill-list">${skills.map(s => card(s, "plugin")).join("")}</div>`
+      + `<div class="skill-list" id="${listId}">${skills.map(s => card(s, "plugin")).join("")}</div>`
       + `</div>`;
   }).join("");
 }
@@ -508,8 +541,21 @@ const skillsEl = document.getElementById("inventory");
 // Click a name → open its SKILL.md in a modal.
 skillsEl.addEventListener("click", (e) => {
   const nameEl = e.target.closest('[data-act="open"]');
-  if (!nameEl) return;
-  openModal(nameEl.getAttribute("data-key"), nameEl.getAttribute("data-name"), nameEl.getAttribute("data-path"), nameEl);
+  if (nameEl) {
+    openModal(nameEl.getAttribute("data-key"), nameEl.getAttribute("data-name"), nameEl.getAttribute("data-path"), nameEl);
+    return;
+  }
+  // Click (or Enter/Space on) the plugin header button → collapse/expand its skill list. The button
+  // sits outside the whole-plugin switch, so the switch never triggers this. Persist the open state
+  // in `expandedPlugins` so a later re-render keeps it open, and keep aria-expanded in sync.
+  const btn = e.target.closest('[data-act="collapse"]');
+  if (btn) {
+    const sub = btn.closest(".plugin-sub");
+    const bare = sub.getAttribute("data-plugin");
+    const collapsed = sub.classList.toggle("collapsed");
+    if (collapsed) expandedPlugins.delete(bare); else expandedPlugins.add(bare);
+    btn.setAttribute("aria-expanded", String(!collapsed));
+  }
 });
 // Modal close: × button, backdrop click, Escape.
 document.getElementById("modal-close").addEventListener("click", closeModal);

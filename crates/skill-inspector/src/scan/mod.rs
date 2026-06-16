@@ -62,39 +62,97 @@ pub fn scan(
         }
     };
 
+    // Turn a walked entry (skill OR command) into a `Skill` with disk-derived state + labels.
+    // Shared so `commands/` entries get identical folder-override / plugin-kill / label handling.
+    let build_skill = |walked: skill_md::WalkedSkill, source_id: &str, agent: &str| -> Skill {
+        let mut skill = Skill {
+            id: walked.id,
+            name: walked.name,
+            description: walked.description,
+            source_id: source_id.to_string(),
+            agent: agent.to_string(),
+            path: walked.path.to_string_lossy().into_owned(),
+            content_hash: walked.content_hash,
+            state: SkillState::Active,
+            metadata_complete: walked.metadata_complete,
+            labels: Vec::new(),
+        };
+        if is_off_in_folder(&skill.source_id, &skill.id) {
+            skill.state = SkillState::DisabledInFolder;
+        }
+        // Plugin-level kill wins: a plugin not in the enabled set (false or absent) is
+        // inert everywhere regardless of any per-repo rule.
+        if let Some(plugin) = skill.source_id.strip_prefix("claude:plugin:") {
+            if !enabled_plugins.contains(plugin) {
+                skill.state = SkillState::DisabledPlugin;
+            }
+        }
+        skill.labels = state.labels.get(&skill.key()).cloned().unwrap_or_default();
+        skill
+    };
+
     for agent in agents {
         let Some(provider) = registry.get(agent) else {
             continue;
         };
         for source in provider.sources(ctx) {
-            if source::classify_availability(std::path::Path::new(&source.root))
-                == crate::model::Availability::Readable
-            {
-                for walked in skill_md::walk_root(std::path::Path::new(&source.root)) {
-                    let mut skill = Skill {
-                        id: walked.id,
-                        name: walked.name,
-                        description: walked.description,
-                        source_id: source.id.clone(),
-                        agent: agent.clone(),
-                        path: walked.path.to_string_lossy().into_owned(),
-                        content_hash: walked.content_hash,
-                        state: SkillState::Active,
-                        metadata_complete: walked.metadata_complete,
-                        labels: Vec::new(),
-                    };
-                    if is_off_in_folder(&skill.source_id, &skill.id) {
-                        skill.state = SkillState::DisabledInFolder;
-                    }
-                    // Plugin-level kill wins: a plugin not in the enabled set (false or absent) is
-                    // inert everywhere regardless of any per-repo rule.
-                    if let Some(plugin) = skill.source_id.strip_prefix("claude:plugin:") {
-                        if !enabled_plugins.contains(plugin) {
-                            skill.state = SkillState::DisabledPlugin;
+            let root = std::path::Path::new(&source.root);
+            // The source root is `<base>/skills`; `<base>` is the plugin install dir (or
+            // `~/.claude` / `<proj>/.claude` for user/project). A *plugin* declares what it loads in
+            // `<base>/.claude-plugin/plugin.json` — and Claude loads exactly those declared paths,
+            // which need NOT be `skills/` or `commands/` (it could put a command under `test/`). So
+            // honor the manifest first; only fall back to the convention dirs for a kind the
+            // manifest doesn't declare. User/project roots have no manifest ⇒ always convention.
+            let base = root.parent();
+            let manifest = if claude::is_plugin_source(&source.id) {
+                base.map(claude::read_plugin_manifest)
+            } else {
+                None
+            };
+
+            // Skills: declared dirs if the manifest lists them, else convention `<base>/skills`.
+            match manifest.as_ref().and_then(|m| m.skills.as_ref()) {
+                Some(dirs) => {
+                    for dir in dirs {
+                        // A declared entry is normally a leaf skill dir (holds `SKILL.md`). If it
+                        // instead points at a container (e.g. `./skills`), fall back to walking its
+                        // children so the skills aren't silently lost.
+                        if let Some(walked) = skill_md::walk_skill_dir(dir) {
+                            skills.push(build_skill(walked, &source.id, agent));
+                        } else {
+                            for walked in skill_md::walk_root(dir) {
+                                skills.push(build_skill(walked, &source.id, agent));
+                            }
                         }
                     }
-                    skill.labels = state.labels.get(&skill.key()).cloned().unwrap_or_default();
-                    skills.push(skill);
+                }
+                None => {
+                    if source::classify_availability(root) == crate::model::Availability::Readable {
+                        for walked in skill_md::walk_root(root) {
+                            skills.push(build_skill(walked, &source.id, agent));
+                        }
+                    }
+                }
+            }
+
+            // Commands the agent also loads: declared files if listed, else convention
+            // `<base>/commands/**/*.md`. A command is a skill from the user's view, so it lands in
+            // the same inventory. (Independent of the skills-root being readable — a root can ship
+            // commands without a `skills/` dir.)
+            match manifest.as_ref().and_then(|m| m.commands.as_ref()) {
+                Some(files) => {
+                    for file in files {
+                        if let Some(walked) = skill_md::walk_command_file(file) {
+                            skills.push(build_skill(walked, &source.id, agent));
+                        }
+                    }
+                }
+                None => {
+                    if let Some(base) = base {
+                        for walked in skill_md::walk_commands_root(&base.join("commands")) {
+                            skills.push(build_skill(walked, &source.id, agent));
+                        }
+                    }
                 }
             }
             sources.push(source);

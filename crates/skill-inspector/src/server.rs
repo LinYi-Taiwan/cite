@@ -44,12 +44,19 @@ impl ServeConfig {
         serde_json::to_string(&export).unwrap_or_else(|_| "{}".to_string())
     }
 
-    /// Raw `SKILL.md` for a skill in the current inventory (looked up by key — never built
-    /// from the request, so no path can be injected). `None` if unknown/unreadable.
+    /// Raw markdown for an entry in the current inventory (looked up by key — never built from
+    /// the request, so no path can be injected). A skill's `path` is its dir (read `SKILL.md`
+    /// inside); a command's `path` is the `.md` file itself (read it directly). `None` if
+    /// unknown/unreadable.
     fn skill_markdown(&self, key: &str) -> Option<String> {
         let inv = self.inventory();
         let skill = inv.find(key)?;
-        let md = std::path::Path::new(&skill.path).join("SKILL.md");
+        let path = std::path::Path::new(&skill.path);
+        let md = if path.is_file() {
+            path.to_path_buf()
+        } else {
+            path.join("SKILL.md")
+        };
         std::fs::read_to_string(md).ok()
     }
 }
