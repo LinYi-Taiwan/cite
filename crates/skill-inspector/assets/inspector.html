@@ -74,10 +74,11 @@
   .skill { border:1px solid var(--line); border-radius:var(--radius-sm); padding:10px 12px; background:var(--card); transition:border-color .15s, box-shadow .15s; }
   .skill:hover { border-color:var(--line-strong); box-shadow:var(--shadow-sm); }
   .skill .head { display:flex; align-items:center; gap:10px; }
-  .skill .name { font-weight:600; cursor:pointer; color:var(--ink); }
+  .skill .name { font-weight:600; cursor:pointer; color:var(--ink); flex:0 0 auto; }
   .skill .name:hover { text-decoration:underline; }
-  .skill .spacer { flex:1; }
-  .skill .loc { color:var(--muted); font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:4px; }
+  /* path sits to the RIGHT of the name on the same row, taking the slack and truncating, so each
+     card stays one line tall instead of spending a whole second row on the path. */
+  .skill .loc { color:var(--muted); font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1 1 auto; min-width:0; text-align:right; }
   .skill .note { font-size:11px; color:var(--muted); margin-top:6px; }
 
   .badge { font-size:11px; padding:1px 7px; border-radius:999px; color:#fff; }
@@ -202,7 +203,7 @@ function esc(s) { return (s==null?"":String(s)).replace(/[&<>"]/g, c => ({"&":"&
 const KIND_META = {
   project:       { title: "This project's skills", note: "from ./.claude/skills" },
   user:          { title: "Personal / global skills", note: "turning one off applies to THIS repo only — your global skill and other repos stay untouched" },
-  plugin:        { title: "Plugin skills", note: "per-skill toggle = block in THIS repo; the per-plugin switch turns the WHOLE plugin on/off for every project" },
+  plugin:        { title: "Plugin skills", note: "all-or-nothing — the per-plugin switch turns the WHOLE plugin on/off for every project; single plugin skills can't be toggled on their own" },
   "other-agent": { title: "Other agents", note: "no per-repo toggle for this source" },
 };
 // Left "Global" column, in sub-heading order. "project" lives in its own right-hand column.
@@ -216,7 +217,9 @@ function sourceKindMap() {
 function kindOf(s, kinds) {
   return kinds[s.source_id] || (s.source_id.startsWith("claude:plugin:") ? "plugin" : "other-agent");
 }
-function canTogglePerRepo(kind) { return kind === "project" || kind === "user" || kind === "plugin"; }
+// Per-repo deny applies to user/project skills only. Plugins are all-or-nothing (whole-plugin
+// switch); their per-skill toggle is forced off in card(), so "plugin" is intentionally absent here.
+function canTogglePerRepo(kind) { return kind === "project" || kind === "user"; }
 
 function render() {
   const q = (document.getElementById("search").value || "").toLowerCase().trim();
@@ -296,24 +299,28 @@ function card(s, kind) {
   // A plugin switched off via `enabledPlugins` is inert in EVERY project — a per-repo toggle can't
   // bring it back, so don't pretend it can. The user must re-enable the plugin in Claude Code.
   const pluginOff = s.state === "disabled-plugin";
-  const toggleable = canTogglePerRepo(kind) && !pluginOff && !window.__EXPORT__;
+  // Plugins are all-or-nothing: a plugin's skills can only be turned on/off as a whole, via the
+  // per-plugin switch on the sub-group header. Individual plugin skills are NOT per-repo toggleable
+  // — block that lever so the on/off state can't drift away from the whole-plugin switch.
+  const isPlugin = kind === "plugin";
+  const toggleable = canTogglePerRepo(kind) && !isPlugin && !pluginOff && !window.__EXPORT__;
   const title = pluginOff ? "this plugin is switched off globally — enable the plugin in Claude Code to use it"
+              : isPlugin ? "plugin skills are all-or-nothing — use the plugin switch above to turn the WHOLE plugin on/off"
               : !canTogglePerRepo(kind) ? "no per-repo toggle for this source"
               : (on ? "enabled — flip to disable in this repo" : "disabled in this repo — flip to enable");
   const pluginNote = kind !== "plugin" ? ""
     : pluginOff
       ? `<div class="note">plugin · <strong>not enabled</strong> — this plugin is off in Claude Code (<code>enabledPlugins</code> is false or unset in <code>settings.json</code>), so none of its skills trigger in any project. Enable the plugin in Claude Code to use it.</div>`
-      : `<div class="note">plugin · per-repo toggle writes a <code>permissions.deny</code> rule — turning it off stops it triggering in this repo, but it may still appear in <code>/skills</code>.</div>`;
+      : `<div class="note">plugin · controlled as a whole — use the plugin switch above; a single plugin skill can't be turned off on its own.</div>`;
   return `<div class="skill" data-key="${k}">
     <div class="head">
       <span class="name" data-act="open" data-key="${k}" data-name="${nm}" data-path="${path}" title="Open SKILL.md">${nm}</span>
-      <span class="spacer"></span>
+      <span class="loc" title="${path}">${path}</span>
       <label class="switch" title="${esc(title)}">
         <input type="checkbox" data-act="toggle" data-key="${k}" aria-label="Toggle ${nm}" ${on ? "checked" : ""} ${toggleable ? "" : "disabled"}>
         <span class="slider"></span>
       </label>
     </div>
-    <div class="loc" title="${path}">${path}</div>
     ${pluginNote}
   </div>`;
 }
