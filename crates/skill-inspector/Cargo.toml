@@ -17,6 +17,8 @@ serde_json.workspace = true
 serde_norway.workspace = true
 sha2.workspace = true
 clap.workspace = true
+# Format-preserving write of the Codex `config.toml` plugin `enabled` flag (action/codex_config.rs).
+toml_edit.workspace = true
 
 # The skill walker (one level of read_dir) and the loopback HTTP server are built on
 # std alone — no `walkdir` / `tiny_http`. This keeps the crate to already-vendored deps,
@@ -37,3 +39,11 @@ path = "tests/overlap_clusters.rs"
 [[test]]
 name = "action_roundtrip"
 path = "tests/action_roundtrip.rs"
+
+[[test]]
+name = "scan_codex"
+path = "tests/scan_codex.rs"
+
+[[test]]
+name = "codex_plugin_toggle"
+path = "tests/codex_plugin_toggle.rs"

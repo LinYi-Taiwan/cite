@@ -8,6 +8,7 @@
 
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Mutex;
 
 use serde_json::json;
 
@@ -17,6 +18,8 @@ use skill_inspector::state::InspectorState;
 use skill_inspector::{build_inventory, scan_context};
 
 static COUNTER: AtomicUsize = AtomicUsize::new(0);
+/// `CODEX_HOME` is process-global; serialize the Codex test's set/remove against it.
+static CODEX_ENV_LOCK: Mutex<()> = Mutex::new(());
 
 struct Env {
     home: PathBuf,
@@ -383,6 +386,113 @@ fn write_to_readonly_root_fails_and_leaves_tree_unchanged() {
     // No quarantine record was written.
     let state = InspectorState::load_from(&env.state_path);
     assert!(state.quarantine.is_empty());
+}
+
+#[test]
+fn codex_quarantine_roundtrips_and_builtin_remove_is_refused() {
+    // T019 (FR-008, FR-013): a Codex skill quarantine disable→restore is lossless, and a destructive
+    // `remove` on a built-in (`.system`) Codex skill is refused.
+    use skill_inspector::model::SkillState;
+    let _guard = CODEX_ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+
+    let src = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/codex_home");
+    let id = COUNTER.fetch_add(1, Ordering::SeqCst);
+    let root = std::env::temp_dir().join(format!("si-codex-act-{}-{}", std::process::id(), id));
+    let _ = std::fs::remove_dir_all(&root);
+    std::fs::create_dir_all(&root).unwrap();
+    let codex_home = root.join("codex");
+    copy_dir(&src, &codex_home).unwrap();
+    std::env::set_var("CODEX_HOME", &codex_home);
+
+    let state_path = root.join("inspector-state.json");
+    let quarantine_dir = root.join("quarantine");
+    let trash_dir = root.join("trash");
+    let inventory = || {
+        let state = InspectorState::load_from(&state_path);
+        // home is irrelevant once CODEX_HOME is set; pass root.
+        build_inventory(
+            &["codex".to_string()],
+            &scan_context(root.clone(), root.clone()),
+            &state,
+        )
+    };
+    let act = |action: &str, req: serde_json::Value| {
+        let inv = inventory();
+        let ctx = ActionCtx {
+            inventory: &inv,
+            project_root: root.clone(),
+            home: root.clone(),
+            state_path: state_path.clone(),
+            quarantine_dir: quarantine_dir.clone(),
+            trash_dir: trash_dir.clone(),
+        };
+        dispatch(&ctx, action, &req)
+    };
+    let skill_state = |id: &str| -> Option<SkillState> {
+        inventory()
+            .skills
+            .iter()
+            .find(|s| s.id == id)
+            .map(|s| s.state)
+    };
+
+    // Native disable: writes `[[skills.config]] enabled=false` to config.toml (NO file move), then
+    // re-enable removes it — reversible, and the skill's files never budge.
+    let key = "codex/codex:user/my-skill";
+    let original = codex_home.join("skills/my-skill/SKILL.md");
+    let original_bytes = std::fs::read(&original).unwrap();
+    let config = codex_home.join("config.toml");
+    let config_before = std::fs::read_to_string(&config).unwrap();
+
+    let resp = act("disable", json!({ "skill_key": key, "scope": "global" }));
+    assert_eq!(resp["ok"], json!(true), "{resp}");
+    assert_eq!(resp["state"], json!("disabled-global"));
+    assert!(
+        original.is_file(),
+        "disable must NOT move the skill's files"
+    );
+    assert_eq!(
+        std::fs::read(&original).unwrap(),
+        original_bytes,
+        "skill file untouched by disable"
+    );
+    // config.toml gained a `[[skills.config]]` entry that selects this skill's SKILL.md + disables it.
+    let config_disabled = std::fs::read_to_string(&config).unwrap();
+    assert!(
+        config_disabled.contains("[[skills.config]]")
+            && config_disabled.contains("my-skill/SKILL.md")
+            && config_disabled.contains("enabled = false"),
+        "config.toml carries the disable entry: {config_disabled}"
+    );
+    assert!(matches!(
+        skill_state("my-skill"),
+        Some(SkillState::DisabledGlobal)
+    ));
+
+    let resp = act("enable", json!({ "skill_key": key }));
+    assert_eq!(resp["ok"], json!(true), "{resp}");
+    assert!(original.is_file(), "still in place after enable");
+    // Re-enable removes the entry, returning config.toml to its prior shape (byte-identical).
+    assert_eq!(
+        std::fs::read_to_string(&config).unwrap(),
+        config_before,
+        "config.toml restored byte-for-byte after re-enable"
+    );
+    assert!(matches!(skill_state("my-skill"), Some(SkillState::Active)));
+
+    // A built-in `.system` skill may be disabled but its destructive remove is refused.
+    let builtin_key = "codex/codex:user/skill-creator";
+    let builtin_dir = codex_home.join("skills/.system/skill-creator");
+    let resp = act(
+        "remove",
+        json!({ "skill_key": builtin_key, "confirm": true }),
+    );
+    assert_eq!(resp["ok"], json!(false), "{resp}");
+    assert_eq!(resp["error"], json!("built_in_remove_refused"));
+    assert!(builtin_dir.is_dir(), "built-in left intact");
+
+    std::env::remove_var("CODEX_HOME");
+    let _ = std::fs::remove_dir_all(&root);
 }
 
 #[cfg(unix)]

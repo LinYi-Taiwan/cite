@@ -3,6 +3,7 @@
 //! + labels) and the target folder's `skillOverrides` to set `state`. Pure-read: never mutates.
 
 pub mod claude;
+pub mod codex;
 pub mod frontmatter;
 pub mod other_agent;
 pub mod skill_md;
@@ -47,6 +48,23 @@ pub fn scan(
     // dominates a folder override (the plugin being off is the reason). So: active iff the bare
     // plugin name is in this enabled set.
     let enabled_plugins = settings::read_enabled_plugin_names(&ctx.home, &ctx.project_root);
+    // Codex plugin on/off lives in `<codex_home>/config.toml` (re-read every scan, never cached —
+    // FR-010). A `codex:plugin:<name>` skill is `DisabledPlugin` when its flag is false. Only
+    // computed when Codex is being scanned (else an empty map ⇒ no effect).
+    let codex_plugin_enabled = if agents.iter().any(|a| a == codex::CodexProvider::AGENT) {
+        codex::CodexProvider::plugin_enabled_map(&codex::CodexProvider::codex_home(&ctx.home))
+    } else {
+        std::collections::BTreeMap::new()
+    };
+    // Codex's native per-skill kill switch: `[[skills.config]] enabled=false` (by SKILL.md path or
+    // skill name) in `config.toml` drops that skill from Codex's loaded set, so the inspector shows
+    // it `DisabledGlobal`. Re-read every scan (never cached, FR-010); empty unless Codex is scanned.
+    let (codex_disabled_paths, codex_disabled_names) =
+        if agents.iter().any(|a| a == codex::CodexProvider::AGENT) {
+            codex::CodexProvider::disabled_skills(&codex::CodexProvider::codex_home(&ctx.home))
+        } else {
+            Default::default()
+        };
     let is_off_in_folder = |source_id: &str, id: &str| {
         if let Some(name) = claude::plugin_skill_perm_name(source_id, id) {
             folder_denies.contains(&name)
@@ -65,6 +83,13 @@ pub fn scan(
     // Turn a walked entry (skill OR command) into a `Skill` with disk-derived state + labels.
     // Shared so `commands/` entries get identical folder-override / plugin-kill / label handling.
     let build_skill = |walked: skill_md::WalkedSkill, source_id: &str, agent: &str| -> Skill {
+        // A Codex skill discovered under the `skills/.system/` subtree is one of Codex's own
+        // built-ins (FR-008) — flag it so the UI marks it and the action layer refuses a remove.
+        let built_in = agent == codex::CodexProvider::AGENT
+            && walked
+                .path
+                .components()
+                .any(|c| c.as_os_str().to_str() == Some(".system"));
         let mut skill = Skill {
             id: walked.id,
             name: walked.name,
@@ -75,6 +100,7 @@ pub fn scan(
             content_hash: walked.content_hash,
             state: SkillState::Active,
             metadata_complete: walked.metadata_complete,
+            built_in,
             labels: Vec::new(),
         };
         if is_off_in_folder(&skill.source_id, &skill.id) {
@@ -85,6 +111,29 @@ pub fn scan(
         if let Some(plugin) = skill.source_id.strip_prefix("claude:plugin:") {
             if !enabled_plugins.contains(plugin) {
                 skill.state = SkillState::DisabledPlugin;
+            }
+        }
+        // Codex plugin-off: a `codex:plugin:<name>` whose config flag is false is inert globally.
+        if let Some(plugin) = skill.source_id.strip_prefix("codex:plugin:") {
+            if codex_plugin_enabled.get(plugin) == Some(&false) {
+                skill.state = SkillState::DisabledPlugin;
+            }
+        }
+        // Codex native per-skill disable: `[[skills.config]] enabled=false` matched by this skill's
+        // SKILL.md path or its name → DisabledGlobal (off in every project, reversibly). Applies to
+        // any Codex skill kind; checked last so an explicit disable wins over Active.
+        if agent == codex::CodexProvider::AGENT {
+            let skill_md = std::path::Path::new(&skill.path)
+                .join("SKILL.md")
+                .to_string_lossy()
+                .into_owned();
+            let disabled = codex_disabled_paths.contains(&skill_md)
+                || skill
+                    .name
+                    .as_ref()
+                    .is_some_and(|n| codex_disabled_names.contains(n));
+            if disabled {
+                skill.state = SkillState::DisabledGlobal;
             }
         }
         skill.labels = state.labels.get(&skill.key()).cloned().unwrap_or_default();
@@ -155,6 +204,20 @@ pub fn scan(
                     }
                 }
             }
+
+            // Codex ships built-ins a level deeper at `skills/.system/<id>/` — the one-level walker
+            // misses them, so walk that subtree explicitly under the same `codex:user` source.
+            // build_skill flags them `built_in` from their on-disk path.
+            if agent == codex::CodexProvider::AGENT && source.id == codex::USER_SOURCE_ID {
+                let system_root = root.join(".system");
+                if source::classify_availability(&system_root)
+                    == crate::model::Availability::Readable
+                {
+                    for walked in skill_md::walk_root(&system_root) {
+                        skills.push(build_skill(walked, &source.id, agent));
+                    }
+                }
+            }
             sources.push(source);
         }
     }
@@ -187,6 +250,7 @@ pub fn scan(
             content_hash: rec.content_hash.clone(),
             state: SkillState::DisabledGlobal,
             metadata_complete,
+            built_in: false,
             labels: state
                 .labels
                 .get(&rec.skill_key)

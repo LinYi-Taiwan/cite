@@ -96,6 +96,51 @@ fn empty_overlap_reports_a_reason() {
 }
 
 #[test]
+fn codex_participates_in_cross_agent_overlap_and_duplicate_identity() {
+    // T012 (FR-011): with Codex scanned alongside Claude, a Codex code-review skill joins the
+    // cross-agent similarity cluster, and a skill present in two Codex sources with identical
+    // content is a DuplicateIdentity cluster — distinct from similarity.
+    let fx = fixtures().join("multi-source");
+    // Point Codex home at the fixture's `.codex` tree (set explicitly so an ambient CODEX_HOME /
+    // the developer's real ~/.codex can't leak in). No lock needed: no other test in this binary
+    // reads CODEX_HOME (the Claude-only cases never invoke the Codex provider).
+    std::env::set_var("CODEX_HOME", fx.join("home/.codex"));
+    let ctx = scan_context(fx.join("project"), fx.join("home"));
+    let export = build_export(
+        &["claude-code".to_string(), "codex".to_string()],
+        &ctx,
+        &InspectorState::default(),
+    );
+    std::env::remove_var("CODEX_HOME");
+
+    // A similarity cluster spans Claude and Codex (the code-review family).
+    let cross_agent = export.clusters.iter().any(|c| {
+        matches!(c.kind, ClusterKind::Similarity)
+            && c.members.iter().any(|m| m.starts_with("claude-code/"))
+            && c.members.iter().any(|m| m.starts_with("codex/"))
+    });
+    assert!(
+        cross_agent,
+        "a Codex skill should participate in a cross-agent similarity cluster: {:?}",
+        export.clusters
+    );
+
+    // The two Codex `dup-skill` copies (codex:user + codex:plugin:p, identical content) form a
+    // DuplicateIdentity cluster — by content hash, not similarity.
+    let dup = export
+        .clusters
+        .iter()
+        .find(|c| {
+            matches!(c.kind, ClusterKind::DuplicateIdentity)
+                && c.members.iter().all(|m| m.contains("dup-skill"))
+        })
+        .expect("a Codex duplicate-identity cluster exists");
+    assert_eq!(dup.members.len(), 2);
+    assert!(dup.members.iter().all(|m| m.starts_with("codex/")));
+    assert_eq!(dup.reason, "identical content hash");
+}
+
+#[test]
 fn scanning_mutates_nothing() {
     // SC-005: re-scan → identical fixture tree (no on-disk change from analysis).
     let fx = fixtures().join("multi-source");

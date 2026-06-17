@@ -1,0 +1,5 @@
+[marketplaces.m]
+source_type = "local"
+
+[plugins."p@m"]
+enabled = true

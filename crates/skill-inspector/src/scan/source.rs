@@ -52,6 +52,7 @@ impl Registry {
     pub fn with_defaults() -> Self {
         let mut r = Self::new();
         r.register(Box::new(crate::scan::claude::ClaudeProvider));
+        r.register(Box::new(crate::scan::codex::CodexProvider));
         r.register(Box::new(crate::scan::other_agent::OtherAgentProvider));
         r
     }

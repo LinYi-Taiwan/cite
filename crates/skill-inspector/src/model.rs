@@ -34,7 +34,17 @@ pub struct Skill {
     pub content_hash: String,
     pub state: SkillState,
     pub metadata_complete: bool,
+    /// True for an agent's own shipped built-in skill (Codex `.system/` subtree, FR-008). Serialized
+    /// only when true so existing exports/snapshots for agents without built-ins stay byte-identical.
+    /// A built-in may be disabled (quarantine) but MUST NOT be offered for destructive removal.
+    #[serde(skip_serializing_if = "is_false", default)]
+    pub built_in: bool,
     pub labels: Vec<String>,
+}
+
+/// `skip_serializing_if` predicate: omit a `false` boolean from the export.
+fn is_false(b: &bool) -> bool {
+    !*b
 }
 
 impl Skill {

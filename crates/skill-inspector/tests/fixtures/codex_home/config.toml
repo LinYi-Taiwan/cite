@@ -1,0 +1,19 @@
+# Codex config — hand-edited; comments and ordering MUST survive a plugin toggle.
+approvals_reviewer = "user"
+model = "gpt-5.5"
+
+[marketplaces.mkt]
+last_updated = "2026-06-08T04:14:22Z"
+source_type = "local"
+source = "/tmp/mkt"
+
+# alpha ships two skills and is ON.
+[plugins."alpha@mkt"]
+enabled = true
+
+# beta ships two skills but is switched OFF — its skills must surface as disabled-plugin.
+[plugins."beta@mkt"]
+enabled = false
+
+[projects."/tmp/example"]
+trust_level = "trusted"

@@ -271,7 +271,10 @@ mod tests {
         .unwrap();
 
         let m = read_plugin_manifest(&install);
-        assert_eq!(m.commands.as_deref().unwrap(), &[install.join("./test/foo.md")]);
+        assert_eq!(
+            m.commands.as_deref().unwrap(),
+            &[install.join("./test/foo.md")]
+        );
         // `skills: []` is declared-empty → Some(vec![]), which means "load none" (NOT convention).
         assert_eq!(m.skills.as_deref().unwrap().len(), 0);
 

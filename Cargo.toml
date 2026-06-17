@@ -17,6 +17,9 @@ serde_json = "1"
 serde_norway = "0.9"
 sha2 = "0.10"
 clap = { version = "4", features = ["derive"] }
+# Format-preserving TOML editor — flips only the `enabled` flag in the Codex `config.toml`
+# (003-codex-skill-support, research §4), leaving the user's comments/ordering byte-stable.
+toml_edit = "0.22"
 insta = { version = "1", features = ["yaml", "json"] }
 
 [profile.release]

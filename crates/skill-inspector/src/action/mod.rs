@@ -3,6 +3,7 @@
 //! Tier-2 global), keeps `InspectorState` consistent, and on any failure leaves the setup in
 //! its prior state (FR-011..015, FR-024). Responses are JSON the UI can apply without a rescan.
 
+pub mod codex_config;
 pub mod overrides;
 pub mod permission;
 pub mod quarantine;
@@ -136,6 +137,21 @@ fn disable(ctx: &ActionCtx, req: &Value) -> Value {
             // silently fall back to a global change (FR-024).
             json!({ "ok": false, "error": "folder_scope_unsupported", "would_be_scope": "global" })
         }
+    } else if skill.agent == crate::scan::codex::CodexProvider::AGENT
+        && !is_plugin_source(&skill.source_id)
+    {
+        // Codex per-skill disable uses its NATIVE switch — `[[skills.config]] enabled=false` in
+        // `<codex_home>/config.toml`, selected by the skill's SKILL.md path — NOT a quarantine move.
+        // It is global (config.toml is user-level) but non-destructive and fully reversible; the
+        // skill's files stay put. This supersedes the quarantine fallback for Codex (research §3 had
+        // wrongly concluded Codex has no per-skill toggle).
+        let codex_home = crate::scan::codex::CodexProvider::codex_home(&ctx.home);
+        let config = codex_home.join("config.toml");
+        let skill_md = Path::new(&skill.path).join("SKILL.md");
+        match codex_config::set_skill_enabled(&config, &skill_md, false) {
+            Ok(_) => json!({ "ok": true, "state": "disabled-global", "effective_scope": "global" }),
+            Err(e) => json!({ "ok": false, "error": format!("write_failed: {e}") }),
+        }
     } else {
         // Tier-2 global quarantine.
         let original_path = PathBuf::from(&skill.path);
@@ -181,16 +197,31 @@ fn enable(ctx: &ActionCtx, req: &Value) -> Value {
     // while denied, so this lookup succeeds. Idempotent if it wasn't actually denied. Skipped
     // when a (legacy) quarantine record exists for this key — that is restored below instead.
     let has_quarantine = state.quarantine.iter().any(|r| r.skill_key == skill_key);
-    if !has_quarantine {
-        if let Some(skill) = ctx.inventory.find(skill_key) {
-            if is_plugin_source(&skill.source_id) {
-                let Some(name) = plugin_skill_perm_name(&skill.source_id, &skill.id) else {
-                    return err("bad_plugin_source");
-                };
-                return match permission::enable(&ctx.project_root, &name) {
-                    Ok(_) => json!({ "ok": true, "state": "active" }),
-                    Err(e) => json!({ "ok": false, "error": format!("write_failed: {e}") }),
-                };
+    if let Some(skill) = ctx.inventory.find(skill_key) {
+        if !has_quarantine && is_plugin_source(&skill.source_id) {
+            let Some(name) = plugin_skill_perm_name(&skill.source_id, &skill.id) else {
+                return err("bad_plugin_source");
+            };
+            return match permission::enable(&ctx.project_root, &name) {
+                Ok(_) => json!({ "ok": true, "state": "active" }),
+                Err(e) => json!({ "ok": false, "error": format!("write_failed: {e}") }),
+            };
+        }
+        // Codex non-plugin skill: re-enable by REMOVING its `[[skills.config]] enabled=false` entry
+        // from `config.toml` (mirrors the native disable above). Idempotent — a no-op when it wasn't
+        // config-disabled. This is THE disable mechanism for Codex now, so with no legacy quarantine
+        // record we're done. If a (pre-003) quarantine record ALSO exists, clear the config entry but
+        // fall through to restore the moved dir too — otherwise the skill would stay DisabledGlobal.
+        if skill.agent == crate::scan::codex::CodexProvider::AGENT
+            && !is_plugin_source(&skill.source_id)
+        {
+            let codex_home = crate::scan::codex::CodexProvider::codex_home(&ctx.home);
+            let config = codex_home.join("config.toml");
+            let skill_md = Path::new(&skill.path).join("SKILL.md");
+            match codex_config::set_skill_enabled(&config, &skill_md, true) {
+                Ok(_) if !has_quarantine => return json!({ "ok": true, "state": "active" }),
+                Ok(_) => {} // legacy quarantine record present → restore it below
+                Err(e) => return json!({ "ok": false, "error": format!("write_failed: {e}") }),
             }
         }
     }
@@ -276,6 +307,33 @@ fn plugin_set_enabled(ctx: &ActionCtx, req: &Value) -> Value {
     if !crate::scan::claude::is_valid_perm_segment(plugin) {
         return err("invalid_plugin_name");
     }
+    // Route by agent. A Codex plugin toggle writes `<codex_home>/config.toml` (format-preservingly),
+    // not the Claude `settings.json`; the Claude branch below is unchanged. Default: claude-code.
+    let agent = req
+        .get("agent")
+        .and_then(|v| v.as_str())
+        .unwrap_or(crate::scan::claude::ClaudeProvider::AGENT);
+    if agent == crate::scan::codex::CodexProvider::AGENT {
+        let codex_home = crate::scan::codex::CodexProvider::codex_home(&ctx.home);
+        let Some(full_key) =
+            crate::scan::codex::CodexProvider::resolve_plugin_full_key(&codex_home, plugin)
+        else {
+            return err("plugin_not_found");
+        };
+        let config = codex_home.join("config.toml");
+        return match codex_config::set_plugin_enabled(&config, &full_key, enabled) {
+            Ok(previous) => json!({
+                "ok": true,
+                "plugin": full_key,
+                "enabled": enabled,
+                "previous": previous,
+                "agent": "codex",
+                "scope": "global",
+                "note": "takes effect after restarting Codex or refreshing /skills"
+            }),
+            Err(e) => json!({ "ok": false, "error": format!("write_failed: {e}") }),
+        };
+    }
     // Resolve the bare name to the exact `"<name>@<marketplace>"` Claude keys on. The written key
     // comes from the trusted manifest (not the request), so there is no injection surface here.
     let Some(full_key) = crate::scan::claude::resolve_plugin_full_key(&ctx.home, plugin) else {
@@ -304,6 +362,11 @@ fn remove(ctx: &ActionCtx, req: &Value) -> Value {
     let Some(skill) = ctx.inventory.find(skill_key) else {
         return err("skill_not_found");
     };
+    // A built-in (e.g. a Codex `.system` skill) must never be destructively removed (FR-008). A
+    // reversible quarantine `disable` of it is still allowed (handled in `disable`).
+    if skill.built_in {
+        return err("built_in_remove_refused");
+    }
     let (_, _, id) = match split_key(skill_key) {
         Some(p) => p,
         None => return err("bad_skill_key"),

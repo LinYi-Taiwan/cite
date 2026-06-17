@@ -58,10 +58,12 @@ pub struct ServeArgs {
     pub port: Option<u16>,
 }
 
-/// Resolve the requested agents, defaulting to the primary agent when none given.
+/// Resolve the requested agents, defaulting to the first-class agents when none given. Codex is
+/// scanned by default alongside Claude (003-codex-skill-support) so the inspector shows a Codex tab
+/// without an explicit `--agent codex`; a machine without Codex degrades gracefully (empty roots).
 pub fn agents_or_default(agents: &[String]) -> Vec<String> {
     if agents.is_empty() {
-        vec!["claude-code".to_string()]
+        vec!["claude-code".to_string(), "codex".to_string()]
     } else {
         agents.to_vec()
     }

@@ -1,0 +1,80 @@
+---
+source: crates/skill-inspector/tests/scan_codex.rs
+assertion_line: 102
+expression: export.skills
+---
+[
+  {
+    "id": "a-one",
+    "name": "a-one",
+    "description": "First skill shipped by the alpha plugin (enabled).",
+    "source_id": "codex:plugin:alpha",
+    "agent": "codex",
+    "path": "<FIX>/plugins/cache/mkt/alpha/1.0.0/skills/a-one",
+    "content_hash": "sha256:8666dc6c205d278fdf0e8c396f14c8d7c52fe79e6274ec239fe09da85ee4b200",
+    "state": "active",
+    "metadata_complete": true,
+    "labels": []
+  },
+  {
+    "id": "a-two",
+    "name": "a-two",
+    "description": "Second skill shipped by the alpha plugin (enabled).",
+    "source_id": "codex:plugin:alpha",
+    "agent": "codex",
+    "path": "<FIX>/plugins/cache/mkt/alpha/1.0.0/skills/a-two",
+    "content_hash": "sha256:595c235a7544d451fb3725882147c1aeb0c8462c32ce73d948db0be018d1406d",
+    "state": "active",
+    "metadata_complete": true,
+    "labels": []
+  },
+  {
+    "id": "b-one",
+    "name": "b-one",
+    "description": "First skill shipped by the beta plugin (disabled).",
+    "source_id": "codex:plugin:beta",
+    "agent": "codex",
+    "path": "<FIX>/plugins/cache/mkt/beta/2.1.0/skills/b-one",
+    "content_hash": "sha256:6f34cd0f553fc1d9b690d2782726147b8f8d7d796feb07b6ea0617526ab0dd28",
+    "state": "disabled-plugin",
+    "metadata_complete": true,
+    "labels": []
+  },
+  {
+    "id": "b-two",
+    "name": "b-two",
+    "description": "Second skill shipped by the beta plugin (disabled).",
+    "source_id": "codex:plugin:beta",
+    "agent": "codex",
+    "path": "<FIX>/plugins/cache/mkt/beta/2.1.0/skills/b-two",
+    "content_hash": "sha256:1da02f4bf05e4edddb6888874b3e19c7cfd852582f1aebc20a116ac93f83548e",
+    "state": "disabled-plugin",
+    "metadata_complete": true,
+    "labels": []
+  },
+  {
+    "id": "my-skill",
+    "name": "my-skill",
+    "description": "A user-authored Codex global skill living directly under skills/.",
+    "source_id": "codex:user",
+    "agent": "codex",
+    "path": "<FIX>/skills/my-skill",
+    "content_hash": "sha256:3c35f25ca1080993833a510b670bfb20d5f6336e52db38cf2bd1fce62dc30a0f",
+    "state": "active",
+    "metadata_complete": true,
+    "labels": []
+  },
+  {
+    "id": "skill-creator",
+    "name": "skill-creator",
+    "description": "A built-in Codex skill shipped under .system/ — must be flagged built_in.",
+    "source_id": "codex:user",
+    "agent": "codex",
+    "path": "<FIX>/skills/.system/skill-creator",
+    "content_hash": "sha256:faa664d6fb8279e72f5fdcaca289049386ecd7a40e3a6e224d0db1ae1d43cebc",
+    "state": "active",
+    "metadata_complete": true,
+    "built_in": true,
+    "labels": []
+  }
+]
